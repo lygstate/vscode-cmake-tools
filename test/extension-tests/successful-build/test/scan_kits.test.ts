@@ -9,6 +9,7 @@ suite('[MinGW Tests]', async () => {
 
   setup(async function(this: Mocha.IBeforeAndAfterContext) {
     this.timeout(100000);
+    this.skip();
   });
 
   test('Test scan of mingw', async () => {
