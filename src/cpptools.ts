@@ -134,13 +134,21 @@ export class CppConfigurationProvider implements cpt.CustomConfigurationProvider
 
   private _workspaceBrowseConfiguration:cpt.WorkspaceBrowseConfiguration = {browsePath:[]};
 
+  private _cachedSourceFileConfiguration: cpt.SourceFileConfigurationItem|undefined;
+
   /**
    * Get the SourceFileConfigurationItem from the index for the given URI
    * @param uri The configuration to get from the index
    */
   private _getConfiguration(uri: vscode.Uri): cpt.SourceFileConfigurationItem|undefined {
     const norm_path = util.platformNormalizePath(uri.fsPath);
-    return this._fileIndex.get(norm_path);
+    let currrentConfig = this._fileIndex.get(norm_path);
+    if (!currrentConfig) {
+      currrentConfig = this._cachedSourceFileConfiguration;
+    } else {
+      this._cachedSourceFileConfiguration = currrentConfig;
+    }
+    return currrentConfig;
   }
 
   /**
