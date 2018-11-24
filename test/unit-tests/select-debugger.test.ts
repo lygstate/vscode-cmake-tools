@@ -37,13 +37,13 @@ suite('Select debugger', async () => {
       throw new Error();
     }
     expect(config.name).to.be.eq('Debug Test');
-    expect(config['MIMode']).to.be.eq('gdb');
+    expect(config['MIMode']).to.be.eq('lldb');
     expect(config.type).to.be.eq('cppdbg');
-    expect(config['miDebuggerPath']).to.be.eq('gdb');
+    expect(config['miDebuggerPath']).to.be.eq('lldb-mi');
     expect(stub.called).to.be.true;
 
-    expect(stub.calledWith('lldb')).to.be.true;
-    expect(stub.calledWith('gdb')).to.be.true;
+    expect(stub.calledWith('lldb')).to.be.false;
+    expect(stub.calledWith('gdb')).to.be.false;
   });
 
   test('Create debug config from cache - GCC', async () => {
