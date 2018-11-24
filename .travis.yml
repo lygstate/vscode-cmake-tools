@@ -1,5 +1,10 @@
 language: cpp
 
+env:
+  global:
+    - NVS_VERSION=1.4.2
+    - NODEJS_VERSION=node/8
+
 os:
   - osx
   - linux
@@ -28,6 +33,13 @@ before_install:
       brew tap caskroom/cask       || exit 2
       brew cask install powershell || exit 2
     fi
+    git clone --branch v$NVS_VERSION --depth 1 https://github.com/jasongin/nvs ~/.nvs
+    . ~/.nvs/nvs.sh
+    nvs --version
+    nvs add $NODEJS_VERSION
+    nvs use $NODEJS_VERSION
+    node --version
+    npm --version
 
 script: pwsh -NonInteractive -NoProfile -NoLogo scripts/ci.ps1
 
