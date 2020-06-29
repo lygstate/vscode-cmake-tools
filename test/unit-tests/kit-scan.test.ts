@@ -6,6 +6,7 @@ chai.use(chaiAsPromised);
 
 import {expect} from 'chai';
 import * as kit from '../../src/kit';
+import * as triple from '../../src/triple';
 import {fs} from '../../src/pr';
 
 import {CMakeTools} from '@cmt/cmake-tools';
@@ -40,6 +41,33 @@ suite('Kits scan test', async () => {
     if (await fs.exists(mingwMakePathBackup)) {
       await fs.rename(mingwMakePathBackup, mingwMakePath);
     }
+  });
+
+  test('gcc target triple match', () => {
+    expect(triple.findTargetTriple('Reading specs from ../lib/gcc-lib/powerpc-wrs-vxworks/gcc-2.96/specs'))
+      .to.equal('powerpc-wrs-vxworks');
+    expect(triple.findTargetTriple(`Reading specs from C:\\WindRiver-VxWorks653-2.2.0.0\\gnu\\3.3.2-vxworks653\\x86-win32\\bin\..\\lib\\gcc-lib\\powerpc-wrs-vxworksae\\3.3.2\\specs`))
+      .to.equal('powerpc-wrs-vxworksae');
+    expect(triple.findTargetTriple('Target: x86_64-linux-gnu'))
+      .to.equal('x86_64-linux-gnu');
+    expect(triple.findTargetTriple('Target: x86_64-alpine-linux-musl'))
+      .to.equal('x86_64-alpine-linux-musl');
+    expect(triple.findTargetTriple('Target: powerpc-wrs-vxworks'))
+      .to.equal('powerpc-wrs-vxworks');
+    expect(triple.findTargetTriple('Target: x86_64-w64-mingw32'))
+      .to.equal('x86_64-w64-mingw32');
+    expect(triple.findTargetTriple('Target: i686-w64-mingw32'))
+      .to.equal('i686-w64-mingw32');
+    expect(triple.findTargetTriple('Target: x86_64-pc-msys'))
+      .to.equal('x86_64-pc-msys');
+    expect(triple.findTargetTriple('Target: x86_64-pc-windows-msvc'))
+      .to.equal('x86_64-pc-windows-msvc');
+    expect(triple.findTargetTriple('Target: arm-none-eabi'))
+      .to.equal('arm-none-eabi');
+    expect(triple.findTargetTriple('Target: arm-none-linux-gnueabi'))
+      .to.equal('arm-none-linux-gnueabi');
+    expect(triple.findTargetTriple('Target: arm-linux-gnueabihf'))
+      .to.equal('arm-linux-gnueabihf');
   });
 
   test('Detect system kits never throws',

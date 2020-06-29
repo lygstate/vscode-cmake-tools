@@ -10,6 +10,30 @@
                 "type": "string",
                 "description": "Name of this kit"
             },
+            "vendor": {
+                "type": "string",
+                "description": "The vendor of this kit"
+            },
+            "hostOs": {
+                "type": "string",
+                "description": "The host OS of this kit"
+            },
+            "targetOs": {
+                "type": "string",
+                "description": "The target OS of this kit"
+            },
+            "targetArch": {
+                "type": "string",
+                "description": "The target architecture of this kit"
+            },
+            "versionMajor": {
+                "type": "string",
+                "description": "The major version of this kit"
+            },
+            "versionMinor": {
+                "type": "string",
+                "description": "The minor version of this kit"
+            },
             "keep": {
                 "type": "boolean",
                 "description": "If `true`, this kit will be kept even if it appears out-of-date."

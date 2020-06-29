@@ -20,6 +20,8 @@ import {loadSchema} from './schema';
 import {compare, dropNulls, objectPairs, Ordering, versionLess} from './util';
 import * as nls from 'vscode-nls';
 
+import { TargetTriple, majorVersionSemver, minorVersionSemver, findTargetTriple, parseTargetTriple } from './triple';
+
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
 
@@ -114,17 +116,57 @@ export interface Kit {
   keep?: boolean;
 }
 
+export interface KitExpand {
+  /**
+   * The vendor of the kit
+   */
+  vendor?: string;
+
+  /**
+   * The host OS of the kit
+   */
+  hostOs?: string;
+
+  /**
+   * The target OS of the kit
+   */
+  targetOs?: string;
+
+  /**
+   * The target architecture of the kit
+   */
+  targetArch?: string;
+
+  /**
+   * The major version of the kit
+   */
+  versionMajor?: string;
+
+  /**
+   * The minor version of the kit
+   */
+  versionMinor?: string;
+}
+
 interface ClangVersion {
   fullVersion: string;
   version: string;
-  target?: string;
+  target: TargetTriple;
   threadModel?: string;
   installedDir?: string;
 }
 
+interface GccVersion {
+  fullVersion: string;
+  version: string;
+  target: TargetTriple;
+  threadModel?: string;
+}
+
 async function getClangVersion(binPath: string): Promise<ClangVersion|null> {
   log.debug(localize('testing.clang.binary', 'Testing Clang binary: {0}', binPath));
-  const exec = await proc.execute(binPath, ['-v']).result;
+  const execOption: proc.ExecutionOptions = { environment: {LC_ALL : 'C' } };
+  const exec = await proc.execute(binPath, ['-v'], null, execOption).result;
   if (exec.retc !== 0) {
     log.debug(localize('bad.clang.binary', 'Bad Clang binary ("-v" returns non-zero): {0}', binPath));
     return null;
@@ -133,22 +175,21 @@ async function getClangVersion(binPath: string): Promise<ClangVersion|null> {
   const version_re = /^(?:Apple LLVM|.*clang) version ([^\s-]+)[\s-]/;
   let version: string = "";
   let fullVersion: string = "";
+  let target: TargetTriple | undefined;
   for (const line of lines) {
     const version_match = version_re.exec(line);
     if (version_match !== null) {
       version = version_match[1];
       fullVersion = line;
-      break;
+    }
+    const target_triple_match = findTargetTriple(line);
+    if (target_triple_match !== null) {
+      target = parseTargetTriple(target_triple_match);
     }
   }
-  if (!version) {
+  if (!version || !target) {
     log.debug(localize('bad.clang.binary.output', 'Bad Clang binary {0} -v output: {1}', binPath, exec.stderr));
     return null;
-  }
-  const target_mat = /Target:\s+(.*)/.exec(exec.stderr);
-  let target: string|undefined;
-  if (target_mat) {
-    target = target_mat[1];
   }
   const thread_model_mat = /Thread model:\s+(.*)/.exec(exec.stderr);
   let threadModel: string|undefined;
@@ -169,6 +210,136 @@ async function getClangVersion(binPath: string): Promise<ClangVersion|null> {
   };
 }
 
+async function getGccVersion(bin: string): Promise<GccVersion|null> {
+  log.debug(localize('testing.gcc.binary', 'Testing GCC binary: {0}', bin));
+  const execOption: proc.ExecutionOptions = { environment: {LC_ALL : 'C' } }; /* Disable localization */
+  const exec = await proc.execute(bin, ['-v'], null, execOption).result;
+  if (exec.retc !== 0) {
+    log.debug(localize('bad.gcc.binary', 'Bad GCC binary ("-v" returns non-zero): {0}', bin));
+    return null;
+  }
+
+  const compiler_version_output = exec.stderr.trim().split('\n');
+  const version_re = /^gcc version (.*?) .*/;
+  let version: string = "";
+  let fullVersion: string = "";
+  let target: TargetTriple | undefined;
+
+  for (const line of compiler_version_output) {
+    const version_match = version_re.exec(line);
+    if (version_match !== null) {
+      version = version_match[1];
+      fullVersion = line;
+    }
+    const target_triple_match = findTargetTriple(line);
+    if (target_triple_match !== null) {
+      target = parseTargetTriple(target_triple_match);
+    }
+  }
+
+  if (!version || !target) {
+    log.debug(localize('bad.gcc.binary.output', 'Bad GCC binary {0} -v output: {1}', bin, exec.stderr));
+    return null;
+  }
+
+  const thread_model_mat = /Thread model:\s+(.*)/.exec(exec.stderr);
+  let threadModel: string|undefined;
+  if (thread_model_mat) {
+    threadModel = thread_model_mat[1];
+  }
+
+  return {
+    fullVersion,
+    version,
+    target,
+    threadModel
+  };
+}
+
+export async function getKitExpand(kit: Kit): Promise<KitExpand|null>
+{
+  const name = kit.name;
+  const c_bin = kit?.compilers?.C;
+  if (name.startsWith("GCC for "))
+  {
+    let version: GccVersion|null = null;
+    if (c_bin) {
+      version = await getGccVersion(c_bin);
+    }
+    if (!version) {
+      return null;
+    }
+    return {
+      vendor: `gnu-${version.target.vendor}`,
+      hostOs: process.platform,
+      targetOs: version.target.targetOs,
+      targetArch: version.target.targetArch,
+      versionMajor: majorVersionSemver(version.version),
+      versionMinor: minorVersionSemver(version.version),
+    };
+  }
+  else if (name.startsWith("Clang for MSVC "))
+  {
+    let version: ClangVersion|null = null;
+    if (c_bin) {
+      version = await getClangVersion(c_bin);
+    }
+    if (!version) {
+      return null;
+    }
+    const vs = await getVSInstallForKit(kit);
+    if (!vs) {
+      return null;
+    }
+
+    return {
+      vendor: 'clang_msvc' + majorVersionSemver(vs.installationVersion),
+      hostOs: process.platform,
+      targetOs: version.target.targetOs,
+      targetArch: version.target.targetArch,
+      versionMajor: majorVersionSemver(version.version),
+      versionMinor: minorVersionSemver(version.version),
+    };
+  }
+  else if (name.startsWith("Clang "))
+  {
+    let version: ClangVersion|null = null;
+    if (c_bin) {
+      version = await getClangVersion(c_bin);
+    }
+    if (!version) {
+      return null;
+    }
+    return {
+      vendor: `clang-${version.target.vendor}}`,
+      hostOs: process.platform,
+      targetOs: version.target.targetOs,
+      targetArch: version.target.targetArch,
+      versionMajor: majorVersionSemver(version.version),
+      versionMinor: minorVersionSemver(version.version),
+    };
+  }
+  else if (kit.visualStudio)
+  {
+    const vs = await getVSInstallForKit(kit);
+    if (!vs) {
+      return null;
+    }
+    return {
+      vendor: 'msvc',
+      hostOs: process.platform,
+      targetOs: process.platform,
+      targetArch: kit.preferredGenerator?.platform,
+      versionMajor: majorVersionSemver(vs.installationVersion),
+      versionMinor: minorVersionSemver(vs.installationVersion),
+    };
+  }
+  else
+  {
+    return null;
+  }
+}
+
 /**
  * Convert a binary (by path) to a CompilerKit. This checks if the named binary
  * is a GCC or Clang compiler and gets its version. If it is not a compiler,
@@ -187,46 +358,22 @@ export async function kitIfCompiler(bin: string, pr?: ProgressReporter): Promise
     log.debug(localize('testing.gcc.binary', 'Testing GCC binary: {0}', bin));
     if (pr)
       pr.report({message: localize('getting.gcc.version', 'Getting GCC version for {0}', bin)});
-    const exec = await proc.execute(bin, ['-v']).result;
-    if (exec.retc !== 0) {
-      log.debug(localize('bad.gcc.binary', 'Bad GCC binary ("-v" returns non-zero): {0}', bin));
-      return null;
-    }
-
-    const compiler_version_output = exec.stderr.trim().split('\n');
-    const version_re = /^gcc version (.*?) .*/;
-    let version: string = "";
-    for (const line of compiler_version_output) {
-      const version_match = version_re.exec(line);
-      if (version_match !== null) {
-        version = version_match[1];
-        break;
-      }
-    }
-    if (!version) {
-      log.debug(localize('bad.gcc.binary.output', 'Bad GCC binary {0} -v output: {1}', bin, exec.stderr));
+    const version = await getGccVersion(bin);
+    if (version === null) {
       return null;
     }
     const gxx_fname = fname.replace(/gcc/, 'g++');
     const gxx_bin = path.join(path.dirname(bin), gxx_fname);
-    const target_triple_re = /((\w+-)+)gcc.*/;
-    const target_triple_match = target_triple_re.exec(fname);
-    let description = '';
-    if (target_triple_match !== null) {
-      description += `for ${target_triple_match[1].slice(0, -1)} `;
-    }
-    const name = `GCC ${description}${version}`;
+    const name = `GCC for ${version.target.triple} ${version.version}`;
     log.debug(localize('detected.gcc.compiler', 'Detected GCC compiler: {0}', bin));
-    let gccKit: Kit = {
-      name,
-      compilers: {
-        C: bin,
-      }
-    };
-
+    const gccCompilers: {[lang: string]: string} = { C: bin };
     if (await fs.exists(gxx_bin)) {
-      gccKit = {name, compilers: {C: bin, CXX: gxx_bin}};
+      gccCompilers.CXX = gxx_bin;
     }
+    const gccKit: Kit = {
+      name,
+      compilers: gccCompilers
+    };
 
     const isWin32 = process.platform === 'win32';
     if (isWin32 && bin.toLowerCase().includes('mingw')) {
@@ -276,7 +423,7 @@ export async function kitIfCompiler(bin: string, pr?: ProgressReporter): Promise
       return null;
     }
 
-    if (version.target && version.target.includes('msvc') &&
+    if (version.target && version.target.triple.includes('msvc') &&
       version.installedDir && version.installedDir.includes("Microsoft Visual Studio")) {
       // Skip MSVC ABI compatible Clang installations (bundled within VS), which will be handled in 'scanForClangForMSVCKits()' later.
       // But still process any Clang installations outside VS (right in Program Files for example), even if their version
@@ -297,22 +444,14 @@ export async function kitIfCompiler(bin: string, pr?: ProgressReporter): Promise
     }
 
     log.debug(localize('detected.clang.compiler', 'Detected Clang compiler: {0}', bin));
+    const clangCompilers: {[lang: string]: string} = { C: bin };
     if (await fs.exists(clangxx_bin)) {
-      return {
-        name,
-        compilers: {
-          C: bin,
-          CXX: clangxx_bin,
-        },
-      };
-    } else {
-      return {
-        name,
-        compilers: {
-          C: bin,
-        },
-      };
+      clangCompilers.CXX = clangxx_bin;
     }
+    return {
+      name,
+      compilers: clangCompilers,
+    };
   } else {
     return null;
   }
@@ -897,7 +1036,7 @@ async function scanDirForClangForMSVCKits(dir: string, vsInstalls: VSInstallatio
     const clangKits: Kit[] = [];
     vsInstalls.forEach(vs => {
       const install_name = vsDisplayName(vs);
-      const vs_arch = (version.target && version.target.includes('i686-pc')) ? 'x86' : 'amd64';
+      const vs_arch = (version.target && version.target.triple.includes('i686-pc')) ? 'x86' : 'amd64';
 
       const clangArch = (vs_arch === "amd64") ? "x64\\" : "";
       if (binPath.startsWith(`${vs.installationPath}\\VC\\Tools\\Llvm\\${clangArch}bin`) &&
@@ -981,11 +1120,28 @@ export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionO
     }
   }
   const env = new Map(util.chain(host_env, kit_env));
-  if (env.has("CMT_MINGW_PATH")) {
+  const isWin32 = process.platform === 'win32';
+  if (isWin32)
+  {
+    const path_list: string[] = [];
+    const cCompiler = kit.compilers?.C;
+    /* Force add the compiler executable dir to the PATH env */
+    if (cCompiler) {
+      path_list.push(path.dirname(cCompiler));
+    }
+    const cmt_mingw_path = env.get("CMT_MINGW_PATH");
+    if (cmt_mingw_path) {
+      path_list.push(cmt_mingw_path);
+    }
+    let path_key : string | undefined = undefined;
     if (env.has("PATH")) {
-      env.set("PATH", env.get("PATH")!.concat(`;${env.get("CMT_MINGW_PATH")}`));
+      path_key = "PATH";
     } else if (env.has("Path")) {
-      env.set("Path", env.get("Path")!.concat(`;${env.get("CMT_MINGW_PATH")}`));
+      path_key = "Path";
+    }
+    if (path_key) {
+      path_list.unshift(env.get(path_key) ?? '');
+      env.set(path_key, path_list.join(';'));
     }
   }
   return env;
@@ -1154,6 +1310,12 @@ async function expandKitVariables(kit: Kit): Promise<Kit> {
       vars: {
         buildKit: kit.name,
         buildType: '${buildType}',  // Unsupported variable substitutions use identity.
+        buildKitVendor: '${buildKitVendor}',
+        buildKitHostOs: '${buildKitVendor}',
+        buildKitTargetOs: '${buildKitTargetOs}',
+        buildKitTargetArch: '${buildKitTargetArch}',
+        buildKitVersionMajor: '${buildKitVersionMajor}',
+        buildKitVersionMinor: '${buildKitVersionMinor}',
         generator: '${generator}',
         userHome: paths.userHome,
         workspaceFolder: '${workspaceFolder}',

@@ -16,7 +16,7 @@ import {CMakeOutputConsumer} from '@cmt/diagnostics/cmake';
 import {RawDiagnosticParser} from '@cmt/diagnostics/util';
 import {ProgressMessage} from '@cmt/drivers/cms-client';
 import * as expand from '@cmt/expand';
-import {CMakeGenerator, effectiveKitEnvironment, Kit, kitChangeNeedsClean} from '@cmt/kit';
+import {CMakeGenerator, effectiveKitEnvironment, Kit, kitChangeNeedsClean, KitExpand, getKitExpand} from '@cmt/kit';
 import * as logging from '@cmt/logging';
 import paths from '@cmt/paths';
 import {fs} from '@cmt/pr';
@@ -173,6 +173,8 @@ export abstract class CMakeDriver implements vscode.Disposable {
    */
   private _kit: Kit|null = null;
 
+  private _kitExpand: KitExpand|null = null;
+
   /**
    * Get the environment and apply any needed
    * substitutions before returning it.
@@ -224,6 +226,12 @@ export abstract class CMakeDriver implements vscode.Disposable {
       generator: this.generatorName || 'null',
       userHome: paths.userHome,
       buildKit: this._kit ? this._kit.name : '__unknownkit__',
+      buildKitVendor: this._kitExpand?.vendor ?? '__unknow_vendor__',
+      buildKitHostOs: this._kitExpand?.hostOs ?? '__unknow_host_os__',
+      buildKitTargetOs: this._kitExpand?.targetOs ?? '__unknow_target_os__',
+      buildKitTargetArch: this._kitExpand?.targetArch ?? '__unknow_target_arch__',
+      buildKitVersionMajor: this._kitExpand?.versionMajor ?? '__unknow_version_major__',
+      buildKitVersionMinor: this._kitExpand?.versionMinor ?? '__unknow_version_minor__',
       // DEPRECATED EXPANSION: Remove this in the future:
       projectName: 'ProjectName',
     };
@@ -331,6 +339,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
 
   private async _setKit(kit: Kit, preferredGenerators: CMakeGenerator[]): Promise<void> {
     this._kit = Object.seal({...kit});
+    this._kitExpand = await getKitExpand(this._kit);
     log.debug(localize('cmakedriver.kit.set.to', 'CMakeDriver Kit set to {0}', kit.name));
     this._kitEnvironmentVariables = await effectiveKitEnvironment(kit, this.expansionOptions);
 

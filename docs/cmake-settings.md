@@ -43,6 +43,12 @@ Some options support the replacement of special values in their string value by 
 |`${workspaceRootFolderName}`| The name of the leaf directory in the workspace directory path.|
 |`${buildType}`|The current CMake build type. For example: `Debug`, `Release`, `MinSizeRel`|
 |`${buildKit}`| The current CMake kit name. For example: `GCC 7.3.0`|
+|`${buildKitVendor}`| The current CMake kit vendor. Possible values: `gnu|msvc|llvm` and so on, all lowercase|
+|`${buildKitHostOs}`| The current CMake kit host OS. Possible values: `win32|osx|linux` and so on, all lowercase|
+|`${buildKitTargetOs}`| The current CMake kit target OS. Possible values: `win32|osx|linux` and so on, all lowercase|
+|`${buildKitTargetArch}`| The current CMake kit target architecture. Possible values `x86,x64,arm,aarch64` and so on, all lowercase|
+|`${buildKitVersionMajor}`| The current CMake kit major version. For example: `7`|
+|`${buildKitVersionMinor}`| The current CMake kit minor version. For example: `3`|
 |`${generator}`| The name of the CMake generator. For example: `Ninja`|
 |`${projectName}`|**DEPRECATED**. Expands to the constant string `"ProjectName"` CMake does not consider there to be just one project name to use. The concept of a single project does not work in CMake. Use `${workspaceRootFolderName}`, instead.|
 |`${userHome}`|  The full path to the current user's home directory. |
