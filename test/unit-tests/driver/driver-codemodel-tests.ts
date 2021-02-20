@@ -49,10 +49,7 @@ export function makeCodeModelDriverTestsuite(
     let kitDefault: Kit;
     if (process.platform === 'win32') {
       kitDefault = {
-        name: 'Visual Studio Community 2017 - amd64',
-        visualStudio: 'VisualStudio.15.0',
-        visualStudioArchitecture: 'amd64',
-        preferredGenerator: {name: 'Visual Studio 15 2017', platform: 'x64'}
+        name: process.env.CMT_KIT_DEFAULT_NAME
       } as Kit;
     } else {
       kitDefault
