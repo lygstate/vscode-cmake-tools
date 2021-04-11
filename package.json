@@ -79,7 +79,7 @@
     "onCommand:cmake.outline.buildAll",
     "workspaceContains:**/CMakeLists.txt",
     "workspaceContains:.vscode/cmake-kits.json"
-    ],
+  ],
   "main": "./dist/main",
   "contributes": {
     "commands": [
@@ -1807,7 +1807,7 @@
           "default": true,
           "description": "%cmake-tools.configuration.cmake.exportCompileCommandsFile.description%"
         },
-        "cmake.useCMakePresets":  {
+        "cmake.useCMakePresets": {
           "oneOf": [
             {
               "type": "boolean"
@@ -1905,6 +1905,7 @@
     "translations-export": "gulp translations-export",
     "translations-generate": "gulp translations-generate",
     "translations-import": "gulp translations-import",
+    "package": "vsce package --yarn -o cmake-tools.vsix",
     "pretest": "tsc -p test.tsconfig.json",
     "postinstall": "node ./node_modules/vscode/bin/install",
     "lint": "node ./node_modules/tslint/bin/tslint -p . --fix",
@@ -1946,6 +1947,7 @@
     "tslint": "^5.20.1",
     "typedoc": "^0.20.25",
     "typescript": "^4.1.5",
+    "vsce": "^1.87.1",
     "vscode": "^1.1.36",
     "vscode-nls-dev": "^3.3.2",
     "webpack": "^5.22.0",
