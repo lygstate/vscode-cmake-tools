@@ -334,11 +334,14 @@ export class CppConfigurationProvider implements cpt.CustomConfigurationProvider
   private _getConfiguration(uri: vscode.Uri): cpt.SourceFileConfigurationItem|undefined {
     const norm_path = util.platformNormalizePath(uri.fsPath);
     const configurations = this._fileIndex.get(norm_path);
+    let config: cpt.SourceFileConfigurationItem|undefined = undefined;
     if (this._activeTarget && configurations?.has(this._activeTarget)) {
-      return configurations!.get(this._activeTarget);
+      config = configurations!.get(this._activeTarget);
     } else {
-      return configurations?.values().next().value; // Any value is fine if the target doesn't match
+      config =configurations?.values().next().value; // Any value is fine if the target doesn't match
     }
+    log.warning(`for ${uri}: ${JSON.stringify(config)}`);
+    return config;
   }
 
   /**
@@ -366,12 +369,17 @@ export class CppConfigurationProvider implements cpt.CustomConfigurationProvider
    * @returns A [WorkspaceBrowseConfiguration](#WorkspaceBrowseConfiguration) with the information required to
    * construct the equivalent of `browse.path` from `c_cpp_properties.json`.
    */
-  async provideBrowseConfiguration() { return this._workspaceBrowseConfiguration; }
+  async provideBrowseConfiguration() {
+    log.warning(`provideBrowseConfiguration ${this._workspaceBrowseConfiguration}`);
+    return this._workspaceBrowseConfiguration;
+  }
 
   async canProvideBrowseConfigurationsPerFolder() { return true; }
 
   async provideFolderBrowseConfiguration(_uri: vscode.Uri): Promise<cpt.WorkspaceBrowseConfiguration> {
-    return this._workspaceBrowseConfigurations.get(util.platformNormalizePath(_uri.fsPath)) ?? this._workspaceBrowseConfiguration;
+    const config = this._workspaceBrowseConfigurations.get(util.platformNormalizePath(_uri.fsPath)) ?? this._workspaceBrowseConfiguration;
+    log.warning(`provideFolderBrowseConfiguration for ${_uri}: ${config}`);
+    return config;
   }
 
   /** No-op */
@@ -469,6 +477,7 @@ export class CppConfigurationProvider implements cpt.CustomConfigurationProvider
     for (const src of grp.sources) {
       const abs = path.isAbsolute(src) ? src : path.join(sourceDir, src);
       const abs_norm = util.platformNormalizePath(abs);
+      log.warning(`${abs} with : ${configuration.compilerPath} ${configuration.includePath}`);
       if (this._fileIndex.has(abs_norm)) {
         this._fileIndex.get(abs_norm)!.set(target.name, {
           uri: vscode.Uri.file(abs).toString(),
