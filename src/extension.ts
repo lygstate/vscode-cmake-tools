@@ -40,6 +40,7 @@ import {expandString, KitContextVars} from '@cmt/expand';
 import paths from '@cmt/paths';
 import {CMakeDriver, CMakePreconditionProblems} from './drivers/driver';
 import {platform} from 'os';
+import { EnvironmentVariables } from './proc';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -728,17 +729,8 @@ class ExtensionManager implements vscode.Disposable {
           return;
         }
         const drv: CMakeDriver | null = await cmt.getCMakeDriverInstance();
-        const env: Map<string, string> = new Map<string, string>();
         const configureEnv = await drv?.getConfigureEnvironment();
-        if (configureEnv) {
-          for (const key in configureEnv) {
-            const value = configureEnv[key];
-            if (util.isString(value)) {
-              env.set(key, value);
-            }
-          }
-        }
-
+        const env = configureEnv ?? process.env as EnvironmentVariables;
         const isMultiConfig = !!cache.get('CMAKE_CONFIGURATION_TYPES');
         if (drv) {
           drv.isMultiConfig = isMultiConfig;
