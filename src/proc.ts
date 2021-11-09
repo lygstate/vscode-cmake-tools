@@ -9,11 +9,11 @@ import * as iconv from 'iconv-lite';
 
 import { createLogger } from './logging';
 import rollbar from './rollbar';
-import * as util from './util';
 
 import * as vscode from 'vscode';
 import * as nls from 'vscode-nls';
 import { ExecutionResult } from './api';
+import { EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from './environmentVariables';
 export { ExecutionResult } from './api';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
@@ -71,14 +71,13 @@ export interface Subprocess {
 export interface BuildCommand {
     command: string;
     args?: string[];
-    build_env?: { [key: string]: string };
+    build_env?: EnvironmentVariablesUndefined;
 }
 
-export interface EnvironmentVariables { [key: string]: string }
 export interface DebuggerEnvironmentVariable { name: string; value: string }
 
 export interface ExecutionOptions {
-    environment?: EnvironmentVariables;
+    environment?: EnvironmentVariablesUndefined;
     shell?: boolean;
     silent?: boolean;
     cwd?: string;
@@ -120,12 +119,12 @@ export function execute(command: string,
     if (!options) {
         options = {};
     }
-    const localeOverride: EnvironmentVariables = {
+    const localeOverride = EnvironmentVariablesUtils.create({
         LANG: "C",
         LC_ALL: "C"
-    };
-    const final_env = util.mergeEnvironment(
-        process.env as EnvironmentVariables,
+    });
+    const final_env = EnvironmentVariablesUtils.merge(
+        process.env,
         options.environment || {},
         options.overrideLocale ? localeOverride : {});
 

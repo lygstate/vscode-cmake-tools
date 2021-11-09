@@ -6,10 +6,10 @@ import * as cache from '@cmt/cache';
 import { CMakeGenerator } from '@cmt/kit';
 import { createLogger } from '@cmt/logging';
 import { fs } from '@cmt/pr';
-import * as proc from '@cmt/proc';
 import rollbar from '@cmt/rollbar';
 import * as util from '@cmt/util';
 import * as nls from 'vscode-nls';
+import { EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from '@cmt/environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -324,7 +324,7 @@ export interface ClientInit {
     onOtherOutput(m: string): Promise<void>;
     onProgress(m: ProgressMessage): Promise<void>;
     onDirty(): Promise<void>;
-    environment: NodeJS.ProcessEnv;
+    environment: EnvironmentVariablesUndefined;
     sourceDir: string;
     binaryDir: string;
     tmpdir: string;
@@ -556,8 +556,7 @@ export class CMakeServerClient {
             pipe_file = `/tmp/cmake-server-${Math.random()}`;
         }
         this._pipeFilePath = pipe_file;
-        const final_env = util.mergeEnvironment(process.env as proc.EnvironmentVariables,
-            params.environment as proc.EnvironmentVariables);
+        const final_env = EnvironmentVariablesUtils.merge(process.env, params.environment);
         const child
             = child_proc.spawn(params.cmakePath, ['-E', 'server', '--experimental', `--pipe=${pipe_file}`], {
                 env: final_env, cwd: params.binaryDir

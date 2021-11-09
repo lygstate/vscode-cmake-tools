@@ -29,7 +29,7 @@ import { CMakeGenerator, Kit } from './kit';
 import { LegacyCMakeDriver } from '@cmt/drivers/legacy-driver';
 import * as logging from './logging';
 import { fs } from './pr';
-import { buildCmdStr, EnvironmentVariables } from './proc';
+import { buildCmdStr, DebuggerEnvironmentVariable } from './proc';
 import { Property } from './prop';
 import rollbar from './rollbar';
 import * as telemetry from './telemetry';
@@ -44,6 +44,7 @@ import { updateFullFeatureSetForFolder, updateCMakeDriverInTaskProvider, enableF
 import { ConfigurationReader } from './config';
 import * as preset from '@cmt/preset';
 import * as util from '@cmt/util';
+import { EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from './environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -2037,6 +2038,15 @@ export class CMakeTools implements vscode.Disposable, api.CMakeToolsAPI {
         return this.getCurrentLaunchTarget();
     }
 
+    async _getTargetLaunchEnvironment(drv: CMakeDriver | null, debug_env?: DebuggerEnvironmentVariable[]): Promise<EnvironmentVariablesUndefined> {
+        const env = util.fromDebuggerEnvironmentVars(debug_env);
+
+        // Add environment variables from ConfigureEnvironment.
+        const configureEnv = await drv?.getConfigureEnvironment();
+
+        return EnvironmentVariablesUtils.merge(env, configureEnv);
+    }
+
     /**
      * Implementation of `cmake.debugTarget`
      */
@@ -2097,15 +2107,12 @@ export class CMakeTools implements vscode.Disposable, api.CMakeToolsAPI {
         // Add debug configuration from settings.
         const user_config = this.workspaceContext.config.debugConfig;
         Object.assign(debug_config, user_config);
-        // Add environment variables from configurePreset.
-        if (this.configurePreset?.environment) {
-            const configure_preset_environment = await drv.getConfigureEnvironment();
-            debug_config.environment = debug_config.environment ? debug_config.environment.concat(util.makeDebuggerEnvironmentVars(configure_preset_environment)) : [];
-        }
-
+        const launchEnv = await this._getTargetLaunchEnvironment(drv, debug_config.environment);
+        debug_config.environment = util.makeDebuggerEnvironmentVars(launchEnv);
         log.debug(localize('starting.debugger.with', 'Starting debugger with following configuration.'), JSON.stringify({
             workspace: this.folder.uri.toString(),
-            config: debug_config
+            config: debug_config,
+            environment: debug_config.environment
         }));
 
         const cfg = vscode.workspace.getConfiguration('cmake', this.folder.uri).inspect<object>('debugConfig');
@@ -2147,22 +2154,9 @@ export class CMakeTools implements vscode.Disposable, api.CMakeToolsAPI {
         }
 
         const user_config = this.workspaceContext.config.debugConfig;
-        let launchEnv: EnvironmentVariables = {};
 
         const drv = await this.getCMakeDriverInstance();
-        if (user_config.environment) {
-            const debugConfigEnvironment: { name: string; value: string }[] = user_config.environment;
-            debugConfigEnvironment.forEach(envVar => {
-                launchEnv[envVar.name] = envVar.value;
-            });
-        }
-
-        // Add environment variables from configurePreset.
-        if (drv && this.configurePreset?.environment) {
-            const configure_preset_environment = await drv.getConfigureEnvironment();
-            launchEnv = util.mergeEnvironment(launchEnv, configure_preset_environment);
-        }
-
+        const launchEnv = await this._getTargetLaunchEnvironment(drv, user_config.environment);
         const termOptions: vscode.TerminalOptions = {
             name: 'CMake/Launch',
             env: launchEnv,

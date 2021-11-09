@@ -11,6 +11,7 @@ import * as telemetry from '@cmt/telemetry';
 import * as vscode from 'vscode';
 import * as nls from 'vscode-nls';
 import { CppDebugConfiguration } from './debugger';
+import { EnvironmentVariablesUndefined } from './environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -23,9 +24,7 @@ export type StatusBarButtonVisibility = "default" | "compact" | "icon" | "hidden
 export type TouchBarButtonVisibility = "default" | "hidden";
 export type UseCMakePresets = 'always' | 'never' | 'auto';
 
-interface HardEnv {
-    [key: string]: string;
-}
+export type HardEnv = EnvironmentVariablesUndefined;
 
 export interface AdvancedTouchBarConfig {
     configure?: TouchBarButtonVisibility;
