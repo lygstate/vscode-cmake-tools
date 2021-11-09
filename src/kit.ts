@@ -1108,8 +1108,26 @@ export async function getVSKitEnvironment(kit: Kit): Promise<EnvironmentVariable
     return varsForVSInstallation(requested, kit.visualStudioArchitecture!, kit.preferredGenerator?.platform);
 }
 
-export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionOptions): Promise<EnvironmentVariablesUndefined> {
-    let host_env: EnvironmentVariablesUndefined | undefined;
+export async function baseKitEnvironment(
+    environmentVariables?: EnvironmentVariablesBasic,
+    environmentSetupScript?: string,
+    opts?: expand.ExpansionOptions
+): Promise<EnvironmentVariablesBasic> {
+    const expandOpts = opts ?? expand.emptyExpansionOptions();
+    EnvironmentVariablesUtils.merge(process.env, environmentVariables)
+    let base_env = await expand.expandString(true, [ as proc.EnvironmentVariables, environmentVariables], opts);
+    if (environmentSetupScript) {
+        const shell_vars = await getShellScriptEnvironment(environmentSetupScript, base_env, expandOpts);
+        if (shell_vars) {
+            base_env = shell_vars;
+        }
+    }
+    return base_env;
+}
+
+export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionOptions): Promise<EnvironmentVariablesBasic> {
+    let host_env: EnvironmentVariablesBasic | undefined;
+    const env = await baseKitEnvironment(kit.environmentVariables, kit.environmentSetupScript, opts);
     const kit_env = EnvironmentVariablesUtils.merge(kit.environmentVariables);
     if (opts) {
         for (const env_var of Object.keys(kit_env)) {

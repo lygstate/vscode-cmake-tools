@@ -32,7 +32,7 @@ export interface Preset {
     description?: string;
     hidden?: boolean;
     inherits?: string | string[];
-    environment?: EnvironmentVariables;
+    environment?: EnvironmentVariables; /* TOOD: It's already contains process.env, compute it in lazy way, record the environmentList */
     vendor?: VendorType;
     condition?: Condition | boolean | null;
 

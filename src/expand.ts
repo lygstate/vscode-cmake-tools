@@ -6,9 +6,9 @@
 import * as vscode from 'vscode';
 
 import { createLogger } from './logging';
-import { replaceAll, fixPaths, errorToString } from './util';
+import { replaceAll, fixPaths, errorToString, objectPairs } from './util';
 import * as nls from 'vscode-nls';
-import { EnvironmentVariables, EnvironmentVariablesUtils } from './environmentVariables';
+import { EnvironmentVariables, EnvironmentVariablesBasic, EnvironmentVariablesUtils } from './environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -86,6 +86,19 @@ export interface ExpansionOptions {
      * Support commands by default
      */
     doNotSupportCommands?: boolean;
+}
+
+export function emptyExpansionOptions() {
+    return ({ vars: {}, recursive: true } as ExpansionOptions);
+}
+
+export async function expandEnvironment(in_env: EnvironmentVariablesBasic, opts: ExpansionOptions) {
+    const env = EnvironmentVariablesUtils.create();
+    await Promise.resolve(
+        objectPairs(in_env)
+            .forEach(async ([key, value]) => env[key] = await expandString(value, opts))
+    );
+    return env;
 }
 
 /**
