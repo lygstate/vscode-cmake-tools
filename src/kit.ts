@@ -20,8 +20,9 @@ import {fs} from './pr';
 import * as proc from './proc';
 import {loadSchema} from './schema';
 import { TargetTriple, findTargetTriple, parseTargetTriple, computeTargetTriple } from './triple';
-import {compare, dropNulls, objectPairs, Ordering, versionLess} from './util';
+import {compare, dropNulls, Ordering, versionLess} from './util';
 import * as nls from 'vscode-nls';
+import { GeneralEnvironmentType } from './proc';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -728,16 +729,15 @@ async function collectDevBatVars(hostArch: string, devbat: string, args: string[
     minor: 0,
     patch: 0
   };
-  const WindowsSDKVersion = vars.get('WindowsSDKVersion') ?? '0.0.0';
+  const WindowsSDKVersion = util.envGetValue(vars, 'WindowsSDKVersion') ?? '0.0.0';
   try {
     WindowsSDKVersionParsed = util.parseVersion(WindowsSDKVersion);
   } catch (err) {
     log.error(`Parse '${WindowsSDKVersion}' failed`);
   }
   if (util.compareVersion(WindowsSDKVersionParsed, {major: 10, minor: 0, patch: 14393}) >= 0) {
-    const WindowsSdkDir = vars.get('WindowsSdkDir') ?? '';
-    const pathKey = vars.has('Path') ? 'Path' : 'PATH';
-    const existPath = vars.get(pathKey) ?? '';
+    const WindowsSdkDir = util.envGetValue(vars, 'WindowsSdkDir') ?? '';
+    const existPath = util.envGetValue(vars, 'PATH') ?? '';
     const oldWinSdkBinPath = path.join(WindowsSdkDir, 'bin', hostArch);
     const newWinSdkBinPath = path.join(WindowsSdkDir, 'bin', WindowsSDKVersion, hostArch);
     const newWinSdkBinPathExist = await fs.exists(newWinSdkBinPath);
@@ -746,7 +746,7 @@ async function collectDevBatVars(hostArch: string, devbat: string, args: string[
         existPath.toLowerCase().indexOf(newWinSdkBinPath.toLowerCase()) < 0) {
       log.info(localize('windows.sdk.path.patch', 'Patch Windows SDK bin path from {0} to {1} for {2}',
         oldWinSdkBinPath, newWinSdkBinPath, devbat));
-      vars.set(pathKey, `${newWinSdkBinPath};${existPath}`);
+      util.envSet(vars, 'PATH', `${newWinSdkBinPath};${existPath}`);
     }
   }
   log.debug(localize('ok.running', 'OK running {0} {1}, env vars: {2}', devbat, args.join(' '), JSON.stringify([...vars])));
@@ -804,7 +804,7 @@ export async function getShellScriptEnvironment(kit: Kit, opts?: expand.Expansio
   } catch (error) {}
   await fs.writeFile(script_path, script); // write batch file
 
-  const res = await proc.execute(run_command, [], null, {shell: true, silent: true}).result; // run script
+  const res = await proc.execute(run_command, [], null, {shell: true, silent: true, environment: base_env}).result; // run script
   await fs.unlink(script_path); // delete script file
   const output = (res.stdout) ? res.stdout + (res.stderr || '') : res.stderr;
 
@@ -815,22 +815,22 @@ export async function getShellScriptEnvironment(kit: Kit, opts?: expand.Expansio
     await fs.unlink(environment_path);
   } catch (error) { log.error(error); }
   if (!env || env === '') {
-    console.log(`Error running ${kit.environmentSetupScript} with:`, output);
+    console.log(`Error running ${environmentSetupScript} with:`, output);
     return;
   }
 
   // split and trim env vars
   const vars
-      = env.split('\n').map(l => l.trim()).filter(l => l.length !== 0).reduce<Map<string, string>>((acc, line) => {
+      = env.split('\n').map(l => l.trim()).filter(l => l.length !== 0).reduce<proc.EnvironmentVariables>((acc, line) => {
           const match = /(\w+)=?(.*)/.exec(line);
           if (match) {
-            acc.set(match[1], match[2]);
+            util.envSet(acc, match[1], match[2]);
           } else {
             log.error(localize('error.parsing.environment', 'Error parsing environment variable: {0}', line));
           }
           return acc;
-        }, new Map());
-  log.debug(localize('ok.running', 'OK running {0}, env vars: {1}', kit.environmentSetupScript, JSON.stringify([...vars])));
+        }, {});
+  log.debug(localize('ok.running', 'OK running {0}, env vars: {1}', environmentSetupScript, JSON.stringify(Object.entries(vars))));
   return vars;
 }
 
@@ -905,25 +905,25 @@ async function varsForVSInstallation(inst: VSInstallation, hostArch: string, tar
     // this issue, but this here seems to work. It basically just sets
     // the VS{vs_version_number}COMNTOOLS environment variable to contain
     // the path to the Common7 directory.
-    const vs_version = variables.get('VISUALSTUDIOVERSION');
-    if (vs_version) {variables.set(`VS${vs_version.replace('.', '')}COMNTOOLS`, common_dir); }
+    const vs_version = util.envGetValue(variables, 'VISUALSTUDIOVERSION');
+    if (vs_version) { util.envSet(variables, `VS${vs_version.replace('.', '')}COMNTOOLS`, common_dir); }
 
     // For Ninja and Makefile generators, CMake searches for some compilers
     // before it checks for cl.exe. We can force CMake to check cl.exe first by
     // setting the CC and CXX environment variables when we want to do a
     // configure.
-    variables.set('CC', 'cl.exe');
-    variables.set('CXX', 'cl.exe');
+    util.envSet(variables, 'CC', 'cl.exe');
+    util.envSet(variables, 'CXX', 'cl.exe');
 
     if (paths.ninjaPath) {
-      let envPATH = variables.get('PATH');
+      let envPATH = util.envGetValue(variables, 'PATH');
       if (undefined !== envPATH) {
         const env_paths = envPATH.split(';');
         const ninja_path = path.dirname(paths.ninjaPath!);
         const ninja_base_path = env_paths.find(path_el => path_el === ninja_path);
         if (undefined === ninja_base_path) {
           envPATH = envPATH.concat(';' + ninja_path);
-          variables.set('PATH', envPATH);
+          util.envSet(variables, 'PATH', envPATH);
         }
       }
     }
@@ -1137,35 +1137,28 @@ export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionO
     if (cCompiler) {
       path_list.push(path.dirname(cCompiler));
     }
-    const cmt_mingw_path = env.get("CMT_MINGW_PATH");
+    const cmt_mingw_path = util.envGetValue(env, "CMT_MINGW_PATH");
     if (cmt_mingw_path) {
       path_list.push(cmt_mingw_path);
     }
-    let path_key: string | undefined;
-    if (env.has("PATH")) {
-      path_key = "PATH";
-    } else if (env.has("Path")) {
-      path_key = "Path";
+    const env_path = util.envGetValue(env, 'PATH');
+    if (env_path) {
+      path_list.unshift(env_path);
     }
-    if (path_key) {
-      path_list.unshift(env.get(path_key) ?? '');
-      env.set(path_key, path_list.join(';'));
-    }
+    util.envSet(env, 'PATH', path_list.join(';'));
   }
   return env;
 }
 
-export async function findCLCompilerPath(env: Map<string, string>): Promise<string|null> {
-  const path_var = util.find(env.entries(), ([key, _val]) => key.toLocaleLowerCase() === 'path');
-  if (!path_var) {
+export async function findCLCompilerPath(env: GeneralEnvironmentType): Promise<string|null> {
+  const path_val = util.envGetValue(env, 'PATH');
+  if (!path_val) {
     return null;
   }
-  const path_ext_var = util.find(env.entries(), ([key, _val]) => key.toLocaleLowerCase() === 'pathext');
-  if (!path_ext_var) {
+  const path_ext = util.envGetValue(env, 'PATHEXT');
+  if (!path_ext) {
     return null;
   }
-  const path_val = path_var[1];
-  const path_ext = path_ext_var[1];
   for (const dir of path_val.split(';')) {
     for (const ext of path_ext.split(';')) {
       const fname = `cl${ext}`;

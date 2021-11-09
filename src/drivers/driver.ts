@@ -16,7 +16,7 @@ import {CMakeOutputConsumer} from '@cmt/diagnostics/cmake';
 import {RawDiagnosticParser} from '@cmt/diagnostics/util';
 import {ProgressMessage} from '@cmt/drivers/cms-client';
 import * as expand from '@cmt/expand';
-import {CMakeGenerator, effectiveKitEnvironment, Kit, kitChangeNeedsClean, KitDetect, getKitDetect, getKitEnvironmentVariablesObject} from '@cmt/kit';
+import {CMakeGenerator, effectiveKitEnvironment, Kit, kitChangeNeedsClean, KitDetect, getKitDetect} from '@cmt/kit';
 import * as logging from '@cmt/logging';
 import paths from '@cmt/paths';
 import {fs} from '@cmt/pr';
@@ -365,13 +365,13 @@ export abstract class CMakeDriver implements vscode.Disposable {
    * Launch the given compilation command in an embedded terminal.
    * @param cmd The compilation command from a compilation database to run
    */
-  runCompileCommand(cmd: ArgsCompileCommand): vscode.Terminal {
+  async runCompileCommand(cmd: ArgsCompileCommand): Promise<vscode.Terminal> {
     let env: proc.EnvironmentVariables;
     if (this.useCMakePresets) {
       // buildpreset.environment at least has process.env after expansion
       env = this._buildPreset!.environment as proc.EnvironmentVariables;
     } else {
-      env = this.getEffectiveSubprocessEnvironment();
+      env = await this.getCMakeBuildCommandEnvironment({});
     }
     const key = `${cmd.directory}${JSON.stringify(env)}`;
     let existing = this._compileTerms.get(key);
@@ -774,7 +774,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
   }
 
   public async testHaveCommand(program: string, args: string[] = ['--version']): Promise<boolean> {
-    const child = this.executeCommand(program, args, undefined, {silent: true});
+    const child = await this.executeCommand(program, args, undefined, {silent: true});
     try {
       const result = await child.result;
       log.debug(localize('command.version.test.return.code', 'Command version test return code {0}', nullableValueToString(result.retc)));
@@ -870,7 +870,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
     if (arg) {
       args.push(arg);
     }
-    const child = this.executeCommand(program, args, undefined, {silent: true, cwd});
+    const child = await this.executeCommand(program, args, undefined, {silent: true, cwd});
     try {
       const result = await child.result;
       console.log(localize('command.version.test.return.code', 'Command version test return code {0}', nullableValueToString(result.retc)));
@@ -1616,7 +1616,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
       }
       const exeOpt: proc.ExecutionOptions
           = {environment: buildcmd.build_env, outputEncoding: outputEnc, useTask: this.config.buildTask};
-      const child = this.executeCommand(buildcmd.command, buildcmd.args, consumer, exeOpt);
+      const child = await this.executeCommand(buildcmd.command, buildcmd.args, consumer, exeOpt);
       this._currentBuildProcess = child;
       await child.result;
       this._currentBuildProcess = null;
