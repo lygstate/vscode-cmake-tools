@@ -16,7 +16,7 @@ import { CMakeOutputConsumer } from '@cmt/diagnostics/cmake';
 import { RawDiagnosticParser } from '@cmt/diagnostics/util';
 import { ProgressMessage } from '@cmt/drivers/cms-client';
 import * as expand from '@cmt/expand';
-import { CMakeGenerator, effectiveKitEnvironment, Kit, kitChangeNeedsClean, KitDetect, getKitDetect, getKitEnvironmentVariablesObject, getVSKitEnvironment } from '@cmt/kit';
+import { CMakeGenerator, effectiveKitEnvironment, Kit, kitChangeNeedsClean, KitDetect, getKitDetect, getVSKitEnvironment } from '@cmt/kit';
 import * as logging from '@cmt/logging';
 import paths from '@cmt/paths';
 import { fs } from '@cmt/pr';
@@ -30,6 +30,7 @@ import { majorVersionSemver, minorVersionSemver, parseTargetTriple, TargetTriple
 import * as preset from '@cmt/preset';
 import * as codemodel from '@cmt/drivers/codemodel-driver-interface';
 import { DiagnosticsConfiguration } from '@cmt/folders';
+import { EnvironmentVariables, EnvironmentVariablesNull, EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from '@cmt/environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -171,13 +172,13 @@ export abstract class CMakeDriver implements vscode.Disposable {
     /**
      * The environment variables required by the current kit
      */
-    private _kitEnvironmentVariables = new Map<string, string>();
+    private _kitEnvironmentVariables = EnvironmentVariablesUtils.create();
 
     /**
      * Compute the environment variables that apply with substitutions by expansionOptions
      */
-    async computeExpandedEnvironment(in_env: proc.EnvironmentVariables, expanded_env: proc.EnvironmentVariables): Promise<proc.EnvironmentVariables> {
-        const env = {} as { [key: string]: string };
+    async computeExpandedEnvironment(in_env: EnvironmentVariablesUndefined, expanded_env: EnvironmentVariablesUndefined): Promise<EnvironmentVariablesUndefined> {
+        const env = EnvironmentVariablesUtils.create();
         const opts = this.expansionOptions;
 
         await Promise.resolve(
@@ -190,16 +191,16 @@ export abstract class CMakeDriver implements vscode.Disposable {
     /**
      * Get the environment variables that should be set at CMake-configure time.
      */
-    async getConfigureEnvironment(): Promise<proc.EnvironmentVariables> {
+    async getConfigureEnvironment(): Promise<EnvironmentVariablesUndefined> {
         if (this.useCMakePresets) {
-            return this._configurePreset?.environment as proc.EnvironmentVariables;
+            return EnvironmentVariablesUtils.merge(this._configurePreset?.environment);
         } else {
-            let envs = getKitEnvironmentVariablesObject(this._kitEnvironmentVariables);
+            let envs = this._kitEnvironmentVariables;
             /* NOTE: By mergeEnvironment one by one to enable expanding self containd variable such as PATH properly */
             /* If configureEnvironment and environment both configured different PATH, doing this will preserve them all */
-            envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
-            envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.configureEnvironment, envs));
-            envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
+            envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
+            envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.configureEnvironment, envs));
+            envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
             return envs;
         }
     }
@@ -207,30 +208,30 @@ export abstract class CMakeDriver implements vscode.Disposable {
     /**
      * Get the environment variables that should be set at CMake-build time.
      */
-    async getCMakeBuildCommandEnvironment(in_env: proc.EnvironmentVariables): Promise<proc.EnvironmentVariables> {
-        let envs: proc.EnvironmentVariables;
+    async getCMakeBuildCommandEnvironment(in_env?: EnvironmentVariablesUndefined): Promise<EnvironmentVariablesUndefined> {
+        let envs: EnvironmentVariablesUndefined;
         if (this.useCMakePresets) {
-            envs = util.mergeEnvironment(in_env, this._buildPreset?.environment as proc.EnvironmentVariables);
+            envs = EnvironmentVariablesUtils.merge(in_env, this._buildPreset?.environment);
         } else {
-            envs = util.mergeEnvironment(in_env, getKitEnvironmentVariablesObject(this._kitEnvironmentVariables));
+            envs = EnvironmentVariablesUtils.merge(in_env, this._kitEnvironmentVariables);
         }
-        envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
-        envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.buildEnvironment, envs));
-        envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
+        envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
+        envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.buildEnvironment, envs));
+        envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
         return envs;
     }
 
     /**
      * Get the environment variables that should be set at CTest and running program time.
      */
-    async getCTestCommandEnvironment(): Promise<proc.EnvironmentVariables> {
+    async getCTestCommandEnvironment(): Promise<EnvironmentVariablesUndefined> {
         if (this.useCMakePresets) {
-            return (this._testPreset?.environment ? this._testPreset?.environment : {}) as proc.EnvironmentVariables;
+            return EnvironmentVariablesUtils.merge(this._testPreset?.environment);
         } else {
-            let envs = getKitEnvironmentVariablesObject(this._kitEnvironmentVariables);
-            envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
-            envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.testEnvironment, envs));
-            envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
+            let envs = this._kitEnvironmentVariables;
+            envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
+            envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.testEnvironment, envs));
+            envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
             return envs;
         }
     }
@@ -336,10 +337,10 @@ export abstract class CMakeDriver implements vscode.Disposable {
         return { vars };
     }
 
-    getEffectiveSubprocessEnvironment(opts?: proc.ExecutionOptions): proc.EnvironmentVariables {
-        const cur_env = process.env as proc.EnvironmentVariables;
-        const kit_env = (this.config.ignoreKitEnv) ? {} : getKitEnvironmentVariablesObject(this._kitEnvironmentVariables);
-        return util.mergeEnvironment(cur_env, kit_env, (opts && opts.environment) ? opts.environment : {});
+    getEffectiveSubprocessEnvironment(opts?: proc.ExecutionOptions): EnvironmentVariablesUndefined {
+        const cur_env = process.env;
+        const kit_env = (this.config.ignoreKitEnv) ? EnvironmentVariablesUtils.create() : this._kitEnvironmentVariables;
+        return EnvironmentVariablesUtils.merge(cur_env, kit_env, opts?.environment);
     }
 
     executeCommand(command: string, args?: string[], consumer?: proc.OutputConsumer, options?: proc.ExecutionOptions): proc.Subprocess {
@@ -365,10 +366,10 @@ export abstract class CMakeDriver implements vscode.Disposable {
      * @param cmd The compilation command from a compilation database to run
      */
     runCompileCommand(cmd: ArgsCompileCommand): vscode.Terminal {
-        let env: proc.EnvironmentVariables;
+        let env: EnvironmentVariables | undefined;
         if (this.useCMakePresets) {
             // buildpreset.environment at least has process.env after expansion
-            env = this._buildPreset!.environment as proc.EnvironmentVariables;
+            env = this._buildPreset!.environment;
         } else {
             env = this.getEffectiveSubprocessEnvironment();
         }
@@ -384,7 +385,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
             const term = vscode.window.createTerminal({
                 name: localize('file.compilation', 'File Compilation'),
                 cwd: cmd.directory,
-                env,
+                env: env as EnvironmentVariablesNull,
                 shellPath
             });
             this._compileTerms.set(key, term);
@@ -578,7 +579,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
     /**
      * Environment variables defined by the current variant
      */
-    private _variantEnv: proc.EnvironmentVariables = {};
+    private _variantEnv: EnvironmentVariablesUndefined = {};
 
     /**
      * Change the current options from the variant.
@@ -590,7 +591,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
         this._variantBuildType = opts.buildType || this._variantBuildType;
         this._variantConfigureSettings = opts.settings || this._variantConfigureSettings;
         this._variantLinkage = opts.linkage || null;
-        this._variantEnv = opts.env || {};
+        this._variantEnv = EnvironmentVariablesUtils.create(opts.env);
         this.variantKeywordSettings = keywordSetting || null;
         await this._refreshExpansions();
     }
@@ -1277,7 +1278,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
                 }
             } else if (this._kit?.visualStudio && this._kit.visualStudioArchitecture) {
                 const env = await getVSKitEnvironment(this._kit);
-                const dirs = env?.get('Path')?.split(';') ?? [];
+                const dirs = env?.['Path']?.split(';') ?? [];
                 let compilerPath = '';
                 for (const dir of dirs) {
                     if (dir.indexOf('MSVC') > 0) {
@@ -1577,7 +1578,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
 
             log.trace(localize('cmake.build.args.are', 'CMake build args are: {0}', JSON.stringify(args)));
 
-            return { command: this.cmake.path, args, build_env: this._buildPreset.environment as proc.EnvironmentVariables };
+            return { command: this.cmake.path, args, build_env: EnvironmentVariablesUtils.merge(this._buildPreset.environment) };
         } else {
             if (!targets || targets.length === 0) {
                 return null;
@@ -1609,7 +1610,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
                 }
             }
 
-            const ninja_env = {} as { [key: string]: string };
+            const ninja_env = EnvironmentVariablesUtils.create();
             ninja_env['NINJA_STATUS'] = '[%s/%t %p :: %e] ';
             const build_env = await this.getCMakeBuildCommandEnvironment(ninja_env);
 
