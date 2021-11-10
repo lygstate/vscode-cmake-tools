@@ -30,7 +30,7 @@ import { majorVersionSemver, minorVersionSemver, parseTargetTriple, TargetTriple
 import * as preset from '@cmt/preset';
 import * as codemodel from '@cmt/drivers/codemodel-driver-interface';
 import { DiagnosticsConfiguration } from '@cmt/folders';
-import { EnvironmentVariables, EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from '@cmt/environmentVariables';
+import { EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from '@cmt/environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -365,14 +365,8 @@ export abstract class CMakeDriver implements vscode.Disposable {
      * Launch the given compilation command in an embedded terminal.
      * @param cmd The compilation command from a compilation database to run
      */
-    runCompileCommand(cmd: ArgsCompileCommand): vscode.Terminal {
-        let env: EnvironmentVariables | undefined;
-        if (this.useCMakePresets) {
-            // buildpreset.environment at least has process.env after expansion
-            env = this._buildPreset!.environment;
-        } else {
-            env = this.getEffectiveSubprocessEnvironment();
-        }
+    async runCompileCommand(cmd: ArgsCompileCommand): Promise<vscode.Terminal> {
+        const env = await this.getCMakeBuildCommandEnvironment();
         const key = `${cmd.directory}${JSON.stringify(env)}`;
         let existing = this._compileTerms.get(key);
         if (existing && this.config.clearOutputBeforeBuild) {
