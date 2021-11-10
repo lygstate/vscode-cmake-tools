@@ -755,10 +755,9 @@ async function collectDevBatVars(hostArch: string, devbat: string, args: string[
 
 /**
  * Gets the environment variables set by a shell script.
- * @param kit The kit to get the environment variables for
+ * @param environmentSetupScript The environmentSetupScript to get the environment variables for the kit
  */
-export async function getShellScriptEnvironment(kit: Kit, opts?: expand.ExpansionOptions): Promise<Map<string, string>|undefined> {
-  console.assert(kit.environmentSetupScript);
+export async function getShellScriptEnvironment(environmentSetupScript: string, base_env: proc.EnvironmentVariables, opts: expand.ExpansionOptions): Promise<proc.EnvironmentVariables|undefined> {
   const filename = Math.random().toString() + (process.platform === 'win32' ? '.bat' : '.sh');
   const script_filename = `vs-cmt-${filename}`;
   const environment_filename = script_filename + '.env';
@@ -784,10 +783,7 @@ export async function getShellScriptEnvironment(kit: Kit, opts?: expand.Expansio
   let script = '';
   let run_command = '';
 
-  let environmentSetupScript = kit.environmentSetupScript;
-  if (opts) {
-    environmentSetupScript = await expand.expandString(environmentSetupScript!, opts);
-  }
+  environmentSetupScript = await expand.expandString(environmentSetupScript!, {...opts, envOverride: base_env});
 
   if (process.platform === 'win32') { // windows
     script += `call "${environmentSetupScript}"\r\n`; // call the user batch script
@@ -1103,32 +1099,30 @@ export async function getVSKitEnvironment(kit: Kit): Promise<Map<string, string>
   return varsForVSInstallation(requested, kit.visualStudioArchitecture!, kit.preferredGenerator?.platform);
 }
 
-export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionOptions): Promise<Map<string, string>> {
-  let host_env;
-  const kit_env = objectPairs(kit.environmentVariables || {});
-  if (opts) {
-    for (const env_var of kit_env) {
-      env_var[1] = await expand.expandString(env_var[1], opts);
-    }
-  }
-  if (kit.environmentSetupScript) {
-    const shell_vars = await getShellScriptEnvironment(kit, opts);
+export async function baseKitEnvironment(
+  environmentVariables?: proc.EnvironmentVariables,
+  environmentSetupScript?: string,
+  opts?: expand.ExpansionOptions
+): Promise<proc.EnvironmentVariables> {
+  const expandOpts = opts ?? expand.emptyExpansionOptions();
+  let base_env = await expand.mergeEnvironmentWithExpand(true, [process.env as proc.EnvironmentVariables, environmentVariables], opts);
+  if (environmentSetupScript) {
+    const shell_vars = await getShellScriptEnvironment(environmentSetupScript, base_env, expandOpts);
     if (shell_vars) {
-      host_env = util.map(shell_vars, ([k, v]): [string, string] => [k.toLocaleUpperCase(), v]) as [string, string][];
+      base_env = shell_vars;
     }
   }
-  if (host_env === undefined) {
-    // get host_env from process if it was not set by shell script before
-    host_env = objectPairs(process.env) as [string, string][];
-  }
+  return base_env;
+}
+
+export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionOptions): Promise<proc.EnvironmentVariables> {
+  const env = await baseKitEnvironment(kit.environmentVariables, kit.environmentSetupScript, opts);
   if (kit.visualStudio && kit.visualStudioArchitecture) {
     const vs_vars = await getVSKitEnvironment(kit);
     if (vs_vars) {
-      return new Map(
-          util.map(util.chain(host_env, kit_env, vs_vars), ([k, v]): [string, string] => [k.toLocaleUpperCase(), v]));
+      return util.mergeEnvironment(env, getKitEnvironmentVariablesObject(vs_vars));
     }
   }
-  const env = new Map(util.chain(host_env, kit_env));
   const isWin32 = process.platform === 'win32';
   if (isWin32) {
     const path_list: string[] = [];

@@ -170,69 +170,56 @@ export abstract class CMakeDriver implements vscode.Disposable {
 
   /**
    * The environment variables required by the current kit
+   * The ${dollar} are not expanded and missing environment variable subs are not expanded for this variables
    */
-  private _kitEnvironmentVariables = new Map<string, string>();
-
-  /**
-   * Compute the environment variables that apply with substitutions by expansionOptions
-   */
-  async computeExpandedEnvironment(in_env: proc.EnvironmentVariables, expanded_env: proc.EnvironmentVariables): Promise<proc.EnvironmentVariables> {
-    const env = {} as {[key: string]: string};
-    const opts = this.expansionOptions;
-
-    await Promise.resolve(
-      util.objectPairs(in_env)
-      .forEach(async ([key, value]) => env[key] = await expand.expandString(value, {...opts, envOverride: expanded_env}))
-    );
-    return env;
-  }
+  private _kitEnvironmentVariables: proc.EnvironmentVariables = {};
 
   /**
    * Get the environment variables that should be set at CMake-configure time.
    */
   async getConfigureEnvironment(): Promise<proc.EnvironmentVariables> {
+    const envs_to_merge: (proc.EnvironmentVariables | undefined)[] = [];
     if (this.useCMakePresets) {
-      return this._configurePreset?.environment as proc.EnvironmentVariables;
+      envs_to_merge.push(this._configurePreset?.environment as proc.EnvironmentVariables);
     } else {
-      let envs = getKitEnvironmentVariablesObject(this._kitEnvironmentVariables);
-      /* NOTE: By mergeEnvironment one by one to enable expanding self containd variable such as PATH properly */
-      /* If configureEnvironment and environment both configured different PATH, doing this will preserve them all */
-      envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
-      envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.configureEnvironment, envs));
-      envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
-      return envs;
+      envs_to_merge.push(this._kitEnvironmentVariables);
     }
+    envs_to_merge.push(this.config.environment);
+    envs_to_merge.push(this.config.configureEnvironment);
+    envs_to_merge.push(this._variantEnv);
+    return expand.mergeEnvironmentWithExpand(false, envs_to_merge, this.expansionOptions);
   }
 
   /**
    * Get the environment variables that should be set at CMake-build time.
    */
   async getCMakeBuildCommandEnvironment(in_env: proc.EnvironmentVariables): Promise<proc.EnvironmentVariables> {
-    let envs: proc.EnvironmentVariables;
+    const envs_to_merge: (proc.EnvironmentVariables | undefined)[] = [in_env];
     if (this.useCMakePresets) {
-      envs =  util.mergeEnvironment(in_env, this._buildPreset?.environment as proc.EnvironmentVariables);
+      envs_to_merge.push(this._buildPreset?.environment as proc.EnvironmentVariables);
     } else {
-      envs = util.mergeEnvironment(in_env, getKitEnvironmentVariablesObject(this._kitEnvironmentVariables));
+      envs_to_merge.push(this._kitEnvironmentVariables);
     }
-    envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
-    envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.buildEnvironment, envs));
-    envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
-    return envs;
+    envs_to_merge.push(this.config.environment);
+    envs_to_merge.push(this.config.buildEnvironment);
+    envs_to_merge.push(this._variantEnv);
+    return expand.mergeEnvironmentWithExpand(false, envs_to_merge, this.expansionOptions);
   }
 
   /**
    * Get the environment variables that should be set at CTest and running program time.
    */
   async getCTestCommandEnvironment(): Promise<proc.EnvironmentVariables> {
+    const envs_to_merge: (proc.EnvironmentVariables | undefined)[] = [];
     if (this.useCMakePresets) {
-      return (this._testPreset?.environment ? this._testPreset?.environment : {}) as proc.EnvironmentVariables;
+      envs_to_merge.push(this._testPreset?.environment as proc.EnvironmentVariables);
     } else {
-      let envs = getKitEnvironmentVariablesObject(this._kitEnvironmentVariables);
-      envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
-      envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this.config.testEnvironment, envs));
-      envs = util.mergeEnvironment(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
-      return envs;
+      envs_to_merge.push(this._kitEnvironmentVariables);
     }
+    envs_to_merge.push(this.config.environment);
+    envs_to_merge.push(this.config.testEnvironment);
+    envs_to_merge.push(this._variantEnv);
+    return expand.mergeEnvironmentWithExpand(false, envs_to_merge, this.expansionOptions);
   }
 
   get onProgress(): vscode.Event<ProgressMessage> {
@@ -336,15 +323,29 @@ export abstract class CMakeDriver implements vscode.Disposable {
     return { vars };
   }
 
-  getEffectiveSubprocessEnvironment(opts?: proc.ExecutionOptions): proc.EnvironmentVariables {
-    const cur_env = process.env as proc.EnvironmentVariables;
-    const kit_env = (this.config.ignoreKitEnv) ? {} : getKitEnvironmentVariablesObject(this._kitEnvironmentVariables);
-    return util.mergeEnvironment(cur_env, kit_env, (opts && opts.environment) ? opts.environment : {});
+  async getEffectiveSubprocessEnvironment(opts?: proc.ExecutionOptions): Promise<proc.EnvironmentVariables> {
+    let envs_to_merge: (proc.EnvironmentVariables | undefined)[] =  [];
+    if (this.config.ignoreKitEnv) {
+      envs_to_merge = [
+        process.env as proc.EnvironmentVariables,
+        this.config.environment,
+        this._variantEnv,
+        opts?.environment
+      ];
+    } else {
+      envs_to_merge = [
+        this._kitEnvironmentVariables,
+        this.config.environment,
+        this._variantEnv,
+        opts?.environment
+      ];
+    }
+    return expand.mergeEnvironmentWithExpand(false, envs_to_merge, this.expansionOptions);
   }
 
-  executeCommand(command: string, args?: string[], consumer?: proc.OutputConsumer, options?: proc.ExecutionOptions):
-      proc.Subprocess {
-    const environment = this.getEffectiveSubprocessEnvironment(options);
+  async executeCommand(command: string, args?: string[], consumer?: proc.OutputConsumer, options?: proc.ExecutionOptions):
+      Promise<proc.Subprocess> {
+    const environment = await this.getEffectiveSubprocessEnvironment(options);
     const exec_options = {...options, environment};
     return proc.execute(command, args, consumer, exec_options);
   }
