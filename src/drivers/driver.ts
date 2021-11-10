@@ -209,16 +209,15 @@ export abstract class CMakeDriver implements vscode.Disposable {
      * Get the environment variables that should be set at CMake-build time.
      */
     async getCMakeBuildCommandEnvironment(in_env?: EnvironmentVariablesUndefined): Promise<EnvironmentVariablesUndefined> {
-        let envs: EnvironmentVariablesUndefined;
         if (this.useCMakePresets) {
-            envs = EnvironmentVariablesUtils.merge(in_env, this._buildPreset?.environment);
+            return EnvironmentVariablesUtils.merge(in_env, this._buildPreset?.environment);
         } else {
-            envs = EnvironmentVariablesUtils.merge(in_env, this._kitEnvironmentVariables);
+            let envs = EnvironmentVariablesUtils.merge(in_env, this._kitEnvironmentVariables);
+            envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
+            envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.buildEnvironment, envs));
+            envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
+            return envs;
         }
-        envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.environment, envs));
-        envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this.config.buildEnvironment, envs));
-        envs = EnvironmentVariablesUtils.merge(envs, await this.computeExpandedEnvironment(this._variantEnv, envs));
-        return envs;
     }
 
     /**
