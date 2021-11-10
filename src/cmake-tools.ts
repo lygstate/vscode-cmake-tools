@@ -2045,8 +2045,8 @@ export class CMakeTools implements vscode.Disposable, api.CMakeToolsAPI {
     async _getTargetLaunchEnvironment(drv: CMakeDriver | null, debug_env?: DebuggerEnvironmentVariable[]): Promise<EnvironmentVariablesUndefined> {
         const env = util.fromDebuggerEnvironmentVars(debug_env);
 
-        // Add environment variables from ConfigureEnvironment.
-        const ctestEnv = await drv?.getConfigureEnvironment();
+        // Add environment variables from CTestCommandEnvironment.
+        const ctestEnv = await drv?.getCTestCommandEnvironment();
 
         return EnvironmentVariablesUtils.merge(env, ctestEnv);
     }
