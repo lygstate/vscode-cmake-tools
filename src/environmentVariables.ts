@@ -17,7 +17,7 @@ export interface EnvironmentOptions {
 }
 
 /*
-EnvironmentVariablesPrivate is proxied because we need
+EnvironmentPrivate is proxied because we need
 mantain compatiable with NodeJS.ProcessEnv.
 For example, supporse we have a env named with `get`, if we using
 typescript `Index Signatures`, then what's the result of env.get will have
@@ -27,7 +27,7 @@ two meaning:
 But for environment variable, access any member with `name` should return the expeted
 environment variable for that  `name`
 */
-class EnvironmentVariablesPrivate {
+class EnvironmentPrivate {
     private keyMapping: Map<string, string>;
     /* Using envProperty symbol is to provide valid implemention for [inspect]() */
     public [envProperty]: EnvironmentWithNull;
@@ -100,7 +100,7 @@ class EnvironmentVariablesPrivate {
 export class EnvironmentUtils {
 
     public static create(from?: Map<string, string> | EnvironmentWithNull | null, options?: EnvironmentOptions): Environment {
-        const env = new EnvironmentVariablesPrivate(options);
+        const env = new EnvironmentPrivate(options);
         const p = new Proxy(env, {
             defineProperty: (target, p, attributes) => Reflect.defineProperty(target[envProperty], p, attributes),
             deleteProperty: (target, p) => Reflect.deleteProperty(target[envProperty], p),
