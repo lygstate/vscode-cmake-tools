@@ -1,3 +1,4 @@
+import * as  util from 'util';
 import { expect } from 'chai';
 import { EnvironmentUtils } from '@cmt/environmentVariables';
 
@@ -16,23 +17,29 @@ suite('[Environment]', async () => {
             E: 'E'
         };
         const resultA = EnvironmentUtils.merge([envA, undefined, null, envB], {preserveNull: false, isWin32: false});
+        expect(util.inspect(resultA)).to.equal("{ A: 'x', d: 'D', a: 'T', u: 'BBQ', E: 'E' }");
+        expect(resultA + '').to.equal("[object Object]");
+        expect(JSON.stringify(resultA)).to.equal('{"A":"x","d":"D","a":"T","u":"BBQ","E":"E"}');
         expect(resultA).to.deep.equal({A: 'x', a: 'T', u: 'BBQ', d: 'D', E: 'E'});
         expect(resultA.hasOwnProperty('U')).to.equal(false);
         expect(resultA.hasOwnProperty('u')).to.equal(true);
         expect('U' in resultA).to.equal(false);
         expect('u' in resultA).to.equal(true);
+
         const resultB = EnvironmentUtils.merge([envA, undefined, null, envB], {preserveNull: true, isWin32: false});
         expect(resultB).to.deep.equal({A: 'x', B: null, a: 'T', u: 'BBQ', d: 'D', D: null, e: null, E: 'E'});
         expect(resultB.hasOwnProperty('U')).to.equal(false);
         expect(resultB.hasOwnProperty('u')).to.equal(true);
         expect('U' in resultB).to.equal(false);
         expect('u' in resultB).to.equal(true);
+
         const resultC = EnvironmentUtils.merge([envA, undefined, null, envB], {preserveNull: false, isWin32: true});
         expect(resultC).to.deep.equal({A: 'T', u: 'BBQ', e: 'E'});
         expect(resultC.hasOwnProperty('U')).to.equal(true);
         expect(resultC.hasOwnProperty('u')).to.equal(true);
         expect('U' in resultC).to.equal(true);
         expect('u' in resultC).to.equal(true);
+
         const resultD = EnvironmentUtils.merge([envA, undefined, null, envB], {preserveNull: true, isWin32: true});
         expect(resultD).to.deep.equal({A: 'T', B: null, u: 'BBQ', d: null, e: 'E'});
         expect(resultD.hasOwnProperty('U')).to.equal(true);
