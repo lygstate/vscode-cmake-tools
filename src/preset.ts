@@ -1262,7 +1262,7 @@ async function expandBuildPresetHelper(folder: string,
             preset.__generator = configurePreset.generator;
 
             if (preset.inheritConfigureEnvironment !== false) { // Check false explicitly since defaults to true
-                inheritedEnv = EnvironmentUtils.mergePreserveNull([inheritedEnv, configurePreset.environment!]);
+                inheritedEnv = EnvironmentUtils.mergePreserveNull([inheritedEnv, configurePreset.environment]);
             }
         } else {
             return null;
@@ -1439,7 +1439,7 @@ async function expandTestPresetHelper(folder: string,
             const parent = await expandTestPresetImpl(folder, parentName, workspaceFolder, sourceDir, preferredGeneratorName, allowUserPreset);
             if (parent) {
                 // Inherit environment
-                inheritedEnv = EnvironmentUtils.mergePreserveNull([parent.environment!, inheritedEnv]);
+                inheritedEnv = EnvironmentUtils.mergePreserveNull([parent.environment, inheritedEnv]);
                 // Inherit other fields
                 let key: keyof TestPreset;
                 for (key in parent) {
