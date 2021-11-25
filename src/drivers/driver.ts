@@ -576,7 +576,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
     /**
      * Environment variables defined by the current variant
      */
-    private _variantEnv: Environment = {};
+    private _variantEnv: Environment = EnvironmentUtils.create();
 
     /**
      * Change the current options from the variant.
