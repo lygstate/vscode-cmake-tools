@@ -10,23 +10,24 @@ export type EnvironmentWithNull = Record<string, string | undefined | null>;
 
 export interface EnvironmentOptions {
     preserveNull?: boolean;
-    /* isWin32 should always preserved for easily running tests on
-      different platform for both win32/non-win32
+    /**
+     * isWin32 should always preserved for easily running tests on
+     * different platform for both win32/non-win32
      */
     isWin32?: boolean;
 }
 
-/*
-EnvironmentPrivate is proxied because we need
-mantain compatiable with NodeJS.ProcessEnv.
-For example, supporse we have a env named with `get`, if we using
-typescript `Index Signatures`, then what's the result of env.get will have
-two meaning:
-  * call the function `get`
-  * get the environment variable `get`
-But for environment variable, access any member with `name` should return the expeted
-environment variable for that  `name`
-*/
+/**
+ * EnvironmentPrivate is proxied because we need
+ * mantain compatiable with NodeJS.ProcessEnv.
+ * For example, supporse we have a env named with `get`, if we using
+ * typescript `Index Signatures`, then what's the result of env.get will have
+ * two meaning:
+ *   * call the function `get`
+ *   * get the environment variable `get`
+ * But for environment variable, access any member with `name` should return the expeted
+ * environment variable for that  `name`
+ */
 class EnvironmentPrivate {
     private keyMapping: Map<string, string>;
     /* Using envProperty symbol is to provide valid implemention for [inspect]() */
@@ -140,9 +141,7 @@ export class EnvironmentUtils {
     }
 
     public static createPreserveNull(from?: Map<string, string> | EnvironmentWithNull | null): EnvironmentWithNull {
-        return EnvironmentUtils.create(from, {
-            preserveNull: true
-        });
+        return EnvironmentUtils.create(from, { preserveNull: true });
     }
 
     public static merge(envs: (EnvironmentWithNull | null | undefined)[], options?: EnvironmentOptions): Environment {
@@ -159,4 +158,3 @@ export class EnvironmentUtils {
         return EnvironmentUtils.merge(envs, { preserveNull: true });
     }
 }
-
