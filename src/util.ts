@@ -8,7 +8,7 @@ import { platform } from 'os';
 
 import { DebuggerEnvironmentVariable, execute } from '@cmt/proc';
 import rollbar from '@cmt/rollbar';
-import { EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from './environmentVariables';
+import { Environment, EnvironmentUtils } from './environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -371,7 +371,7 @@ export function* flatMap<In, Out>(rng: Iterable<In>, fn: (item: In) => Iterable<
     }
 }
 
-export function makeDebuggerEnvironmentVars(env?: EnvironmentVariablesUndefined): DebuggerEnvironmentVariable[] {
+export function makeDebuggerEnvironmentVars(env?: Environment): DebuggerEnvironmentVariable[] {
     if (!env) {
         return [];
     }
@@ -387,8 +387,8 @@ export function makeDebuggerEnvironmentVars(env?: EnvironmentVariablesUndefined)
     return converted_env;
 }
 
-export function fromDebuggerEnvironmentVars(debug_env?: DebuggerEnvironmentVariable[]): EnvironmentVariablesUndefined {
-    const env = EnvironmentVariablesUtils.create();
+export function fromDebuggerEnvironmentVars(debug_env?: DebuggerEnvironmentVariable[]): Environment {
+    const env = EnvironmentUtils.create();
     if (debug_env) {
         debug_env.forEach(envVar => {
             env[envVar.name] = envVar.value;

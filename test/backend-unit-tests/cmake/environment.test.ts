@@ -1,31 +1,51 @@
 import { expect } from 'chai';
-import { EnvironmentVariablesUtils } from '@cmt/environmentVariables';
+import { EnvironmentUtils } from '@cmt/environmentVariables';
 
 suite('[Environment]', async () => {
     test('Environment variable to `preserve/non-preserve null` `win/non-win`', () => {
         const envA = {
             A: 'x',
-            B: null
+            B: null,
+            d: 'D',
+            e: null
         };
         const envB = {
             a: 'T',
-            u: 'BBQ'
+            u: 'BBQ',
+            D: null,
+            E: 'E'
         };
-        const resultA = EnvironmentVariablesUtils.mergeImpl(false, false, envA, undefined, envB);
-        expect(resultA).to.deep.equal({A: 'x', a: 'T', u: 'BBQ'});
-        const resultB = EnvironmentVariablesUtils.mergeImpl(true, false, envA, undefined, envB);
-        expect(resultB).to.deep.equal({A: 'x', B: null, a: 'T', u: 'BBQ'});
-        const resultC = EnvironmentVariablesUtils.mergeImpl(false, true, envA, undefined, envB);
-        expect(resultC).to.deep.equal({A: 'T', u: 'BBQ'});
-        const resultD = EnvironmentVariablesUtils.mergeImpl(true, true, envA, undefined, envB);
-        expect(resultD).to.deep.equal({A: 'T', B: null, u: 'BBQ'});
+        const resultA = EnvironmentUtils.merge([envA, undefined, null, envB], {preserveNull: false, isWin32: false});
+        expect(resultA).to.deep.equal({A: 'x', a: 'T', u: 'BBQ', d: 'D', E: 'E'});
+        expect(resultA.hasOwnProperty('U')).to.equal(false);
+        expect(resultA.hasOwnProperty('u')).to.equal(true);
+        expect('U' in resultA).to.equal(false);
+        expect('u' in resultA).to.equal(true);
+        const resultB = EnvironmentUtils.merge([envA, undefined, null, envB], {preserveNull: true, isWin32: false});
+        expect(resultB).to.deep.equal({A: 'x', B: null, a: 'T', u: 'BBQ', d: 'D', D: null, e: null, E: 'E'});
+        expect(resultB.hasOwnProperty('U')).to.equal(false);
+        expect(resultB.hasOwnProperty('u')).to.equal(true);
+        expect('U' in resultB).to.equal(false);
+        expect('u' in resultB).to.equal(true);
+        const resultC = EnvironmentUtils.merge([envA, undefined, null, envB], {preserveNull: false, isWin32: true});
+        expect(resultC).to.deep.equal({A: 'T', u: 'BBQ', e: 'E'});
+        expect(resultC.hasOwnProperty('U')).to.equal(true);
+        expect(resultC.hasOwnProperty('u')).to.equal(true);
+        expect('U' in resultC).to.equal(true);
+        expect('u' in resultC).to.equal(true);
+        const resultD = EnvironmentUtils.merge([envA, undefined, null, envB], {preserveNull: true, isWin32: true});
+        expect(resultD).to.deep.equal({A: 'T', B: null, u: 'BBQ', d: null, e: 'E'});
+        expect(resultD.hasOwnProperty('U')).to.equal(true);
+        expect(resultD.hasOwnProperty('u')).to.equal(true);
+        expect('U' in resultD).to.equal(true);
+        expect('u' in resultD).to.equal(true);
 
         const m = new Map<string, string>();
         m.set('DD', 'FF');
         m.set('dd', 'FE');
-        const resultE = EnvironmentVariablesUtils.create(m, false, false);
+        const resultE = EnvironmentUtils.create(m, {preserveNull: false, isWin32: false});
         expect(resultE).to.deep.equal({DD: 'FF', dd: 'FE'});
-        const resultF = EnvironmentVariablesUtils.create(m, false, true);
+        const resultF = EnvironmentUtils.create(m, {preserveNull: false, isWin32: true});
         expect(resultF).to.deep.equal({DD: 'FE'});
         expect(resultF['dd']).to.equal('FE');
 
@@ -43,18 +63,18 @@ suite('[Environment]', async () => {
         expect(resultF['DD-NON-EXIST-KEY']).to.equal('cc');
         expect(Object.keys(resultF).sort()).to.deep.equal(["DD", "DD-NON-EXIST-KEY"]);
 
-        const localeOverrideA = EnvironmentVariablesUtils.create({
+        const localeOverrideA = EnvironmentUtils.create({
             LANG: "C",
             LC_ALL: "C",
             lc_all: "C"
-        }, false, false);
+        }, {preserveNull: false, isWin32: false});
         expect(localeOverrideA).to.deep.equal({LANG: 'C', LC_ALL: 'C', lc_all: "C"});
 
-        const localeOverrideB = EnvironmentVariablesUtils.create({
+        const localeOverrideB = EnvironmentUtils.create({
             LANG: "C",
             LC_ALL: "C",
             lc_all: "GBK"
-        }, false, true);
+        }, {preserveNull: false, isWin32: true});
         expect(localeOverrideB).to.deep.equal({LANG: 'C', LC_ALL: 'GBK'});
     });
 });

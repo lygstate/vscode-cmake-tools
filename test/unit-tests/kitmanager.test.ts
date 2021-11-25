@@ -4,7 +4,7 @@ import { expect } from '@test/util';
 import * as path from 'path';
 import paths from '@cmt/paths';
 import { fs } from '@cmt/pr';
-import { EnvironmentVariablesUtils } from '@cmt/environmentVariables';
+import { EnvironmentUtils } from '@cmt/environmentVariables';
 
 const here = __dirname;
 function getTestResourceFilePath(filename: string): string {
@@ -12,7 +12,7 @@ function getTestResourceFilePath(filename: string): string {
 }
 
 // for safety, ensure we reset the state of the process.env after every test since we're manipulating it in this suite.
-const env = EnvironmentVariablesUtils.create(process.env);
+const env = EnvironmentUtils.create(process.env);
 
 suite('Kits test', async () => {
     teardown(() => {

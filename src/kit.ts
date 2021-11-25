@@ -22,7 +22,7 @@ import { loadSchema } from './schema';
 import { TargetTriple, findTargetTriple, parseTargetTriple, computeTargetTriple } from './triple';
 import { compare, dropNulls, Ordering, versionLess } from './util';
 import * as nls from 'vscode-nls';
-import { EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from './environmentVariables';
+import { Environment, EnvironmentUtils } from './environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -107,7 +107,7 @@ export interface Kit extends KitDetect {
     /**
      * Additional environment variables for the kit
      */
-    environmentVariables?: EnvironmentVariablesUndefined;
+    environmentVariables?: Environment;
 
     /**
      * The language compilers.
@@ -698,7 +698,7 @@ const MSVC_ENVIRONMENT_VARIABLES = [
  * @param devbat Path to a VS environment batch file
  * @param args List of arguments to pass to the batch file
  */
-async function collectDevBatVars(hostArch: string, devbat: string, args: string[], major_version: number, common_dir: string): Promise<EnvironmentVariablesUndefined | undefined> {
+async function collectDevBatVars(hostArch: string, devbat: string, args: string[], major_version: number, common_dir: string): Promise<Environment | undefined> {
     const fname = Math.random().toString() + '.bat';
     const batfname = `vs-cmt-${fname}`;
     const envfname = batfname + '.env';
@@ -766,8 +766,8 @@ async function collectDevBatVars(hostArch: string, devbat: string, args: string[
         env = '';
     }
 
-    const vars: EnvironmentVariablesUndefined
-        = env.split('\n').map(l => l.trim()).filter(l => l.length !== 0).reduce<EnvironmentVariablesUndefined>((acc, line) => {
+    const vars: Environment
+        = env.split('\n').map(l => l.trim()).filter(l => l.length !== 0).reduce<Environment>((acc, line) => {
             const mat = /(\w+) := ?(.*)/.exec(line);
             if (mat) {
                 acc[mat[1]] = mat[2];
@@ -775,7 +775,7 @@ async function collectDevBatVars(hostArch: string, devbat: string, args: string[
                 log.error(localize('error.parsing.environment', 'Error parsing environment variable: {0}', line));
             }
             return acc;
-        }, EnvironmentVariablesUtils.create());
+        }, EnvironmentUtils.create());
     const include_env = vars['INCLUDE'] ?? '';
     if (include_env === '') {
         log.error(localize('script.run.error.check',
@@ -817,7 +817,7 @@ async function collectDevBatVars(hostArch: string, devbat: string, args: string[
  * Gets the environment variables set by a shell script.
  * @param kit The kit to get the environment variables for
  */
-export async function getShellScriptEnvironment(kit: Kit, opts?: expand.ExpansionOptions): Promise<EnvironmentVariablesUndefined | undefined> {
+export async function getShellScriptEnvironment(kit: Kit, opts?: expand.ExpansionOptions): Promise<Environment | undefined> {
     console.assert(kit.environmentSetupScript);
     const filename = Math.random().toString() + (process.platform === 'win32' ? '.bat' : '.sh');
     const script_filename = `vs-cmt-${filename}`;
@@ -883,7 +883,7 @@ export async function getShellScriptEnvironment(kit: Kit, opts?: expand.Expansio
 
     // split and trim env vars
     const vars
-        = env.split('\n').map(l => l.trim()).filter(l => l.length !== 0).reduce<EnvironmentVariablesUndefined>((acc, line) => {
+        = env.split('\n').map(l => l.trim()).filter(l => l.length !== 0).reduce<Environment>((acc, line) => {
             const match = /(\w+)=?(.*)/.exec(line);
             if (match) {
                 acc[match[1]] = match[2];
@@ -891,7 +891,7 @@ export async function getShellScriptEnvironment(kit: Kit, opts?: expand.Expansio
                 log.error(localize('error.parsing.environment', 'Error parsing environment variable: {0}', line));
             }
             return acc;
-        }, EnvironmentVariablesUtils.create());
+        }, EnvironmentUtils.create());
     log.debug(localize('ok.running', 'OK running {0}, env vars: {1}', kit.environmentSetupScript, JSON.stringify(vars)));
     return vars;
 }
@@ -935,7 +935,7 @@ const VsGenerators: { [key: string]: string } = {
     17: 'Visual Studio 17 2022'
 };
 
-async function varsForVSInstallation(inst: VSInstallation, hostArch: string, targetArch?: string): Promise<EnvironmentVariablesUndefined | null> {
+async function varsForVSInstallation(inst: VSInstallation, hostArch: string, targetArch?: string): Promise<Environment | null> {
     log.trace(`varsForVSInstallation path:'${inst.installationPath}' version:${inst.installationVersion} host arch:${hostArch} - target arch:${targetArch}`);
     const common_dir = path.join(inst.installationPath, 'Common7', 'Tools');
     const majorVersion = parseInt(inst.installationVersion);
@@ -1157,7 +1157,7 @@ async function getVSInstallForKit(kit: Kit): Promise<VSInstallation | undefined>
     return installs.find(match);
 }
 
-export async function getVSKitEnvironment(kit: Kit): Promise<EnvironmentVariablesUndefined | null> {
+export async function getVSKitEnvironment(kit: Kit): Promise<Environment | null> {
     const requested = await getVSInstallForKit(kit);
     if (!requested) {
         return null;
@@ -1166,9 +1166,9 @@ export async function getVSKitEnvironment(kit: Kit): Promise<EnvironmentVariable
     return varsForVSInstallation(requested, kit.visualStudioArchitecture!, kit.preferredGenerator?.platform);
 }
 
-export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionOptions): Promise<EnvironmentVariablesUndefined> {
-    let host_env: EnvironmentVariablesUndefined | undefined;
-    const kit_env = EnvironmentVariablesUtils.merge(kit.environmentVariables);
+export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionOptions): Promise<Environment> {
+    let host_env: Environment | undefined;
+    const kit_env = EnvironmentUtils.create(kit.environmentVariables);
     if (opts) {
         for (const env_var of Object.keys(kit_env)) {
             kit_env[env_var] = await expand.expandString(kit_env[env_var], opts);
@@ -1190,7 +1190,7 @@ export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionO
             return vs_vars;
         }
     }
-    const env = EnvironmentVariablesUtils.merge(host_env, kit_env);
+    const env = EnvironmentUtils.merge([host_env, kit_env]);
     const isWin32 = process.platform === 'win32';
     if (isWin32) {
         const path_list: string[] = [];
@@ -1211,7 +1211,7 @@ export async function effectiveKitEnvironment(kit: Kit, opts?: expand.ExpansionO
     return env;
 }
 
-export async function findCLCompilerPath(env?: EnvironmentVariablesUndefined): Promise<string | null> {
+export async function findCLCompilerPath(env?: Environment): Promise<string | null> {
     if (!env) {
         return null;
     }

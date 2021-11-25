@@ -13,7 +13,7 @@ import rollbar from './rollbar';
 import * as vscode from 'vscode';
 import * as nls from 'vscode-nls';
 import { ExecutionResult } from './api';
-import { EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from './environmentVariables';
+import { Environment, EnvironmentUtils } from './environmentVariables';
 export { ExecutionResult } from './api';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
@@ -71,13 +71,13 @@ export interface Subprocess {
 export interface BuildCommand {
     command: string;
     args?: string[];
-    build_env?: EnvironmentVariablesUndefined;
+    build_env?: Environment;
 }
 
 export interface DebuggerEnvironmentVariable { name: string; value: string }
 
 export interface ExecutionOptions {
-    environment?: EnvironmentVariablesUndefined;
+    environment?: Environment;
     shell?: boolean;
     silent?: boolean;
     cwd?: string;
@@ -119,14 +119,14 @@ export function execute(command: string,
     if (!options) {
         options = {};
     }
-    const localeOverride = EnvironmentVariablesUtils.create({
+    const localeOverride = EnvironmentUtils.create({
         LANG: "C",
         LC_ALL: "C"
     });
-    const final_env = EnvironmentVariablesUtils.merge(
+    const final_env = EnvironmentUtils.merge([
         process.env,
-        options.environment || {},
-        options.overrideLocale ? localeOverride : {});
+        options.environment,
+        options.overrideLocale ? localeOverride : {}]);
 
     const spawn_opts: proc.SpawnOptions = {
         env: final_env,
