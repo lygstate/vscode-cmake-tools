@@ -44,7 +44,7 @@ import { updateFullFeatureSetForFolder, updateCMakeDriverInTaskProvider, enableF
 import { ConfigurationReader } from './config';
 import * as preset from '@cmt/preset';
 import * as util from '@cmt/util';
-import { EnvironmentVariablesUndefined, EnvironmentVariablesUtils } from './environmentVariables';
+import { Environment, EnvironmentUtils } from './environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -2043,13 +2043,13 @@ export class CMakeTools implements vscode.Disposable, api.CMakeToolsAPI {
      * Array.concat's performance would not beat the Dict.merge a lot.
      * This is also the point to fixing the issue #1987
      */
-    async _getTargetLaunchEnvironment(drv: CMakeDriver | null, debug_env?: DebuggerEnvironmentVariable[]): Promise<EnvironmentVariablesUndefined> {
+    async _getTargetLaunchEnvironment(drv: CMakeDriver | null, debug_env?: DebuggerEnvironmentVariable[]): Promise<Environment> {
         const env = util.fromDebuggerEnvironmentVars(debug_env);
 
         // Add environment variables from ConfigureEnvironment.
         const configureEnv = await drv?.getConfigureEnvironment();
 
-        return EnvironmentVariablesUtils.merge(env, configureEnv);
+        return EnvironmentUtils.merge([env, configureEnv]);
     }
 
     /**

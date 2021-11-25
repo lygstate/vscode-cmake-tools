@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { createLogger } from './logging';
 import { replaceAll, fixPaths, errorToString } from './util';
 import * as nls from 'vscode-nls';
-import { EnvironmentVariables, EnvironmentVariablesUtils } from './environmentVariables';
+import { EnvironmentWithNull, EnvironmentUtils } from './environmentVariables';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
 const localize: nls.LocalizeFunc = nls.loadMessageBundle();
@@ -73,7 +73,7 @@ export interface ExpansionOptions {
      * variables for the running process. Only environment variables in this key
      * will be expanded.
      */
-    envOverride?: EnvironmentVariables;
+    envOverride?: EnvironmentWithNull;
     /**
      * Variables for `${variant:var}`-style expansions.
      */
@@ -122,7 +122,7 @@ export async function expandString(tmpl: string | null | undefined, opts: Expans
 
 async function expandStringHelper(tmpl: string, opts: ExpansionOptions) {
     const envPreNormalize = opts.envOverride ? opts.envOverride : process.env;
-    const env = EnvironmentVariablesUtils.merge(envPreNormalize);
+    const env = EnvironmentUtils.create(envPreNormalize);
     const repls = opts.vars;
 
     // We accumulate a list of substitutions that we need to make, preventing
