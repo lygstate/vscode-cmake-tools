@@ -177,7 +177,7 @@ async function expandStringHelper(tmpl: string, opts: ExpansionOptions) {
     while ((mat = penv_re.exec(tmpl))) {
         const full = mat[0];
         const varname = mat[1];
-        const repl = fixPaths(process.env[varname] || '') || '';
+        const repl = fixPaths(process.env[varname]) || '';
         subs.set(full, repl);
     }
 
