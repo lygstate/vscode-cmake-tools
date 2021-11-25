@@ -95,9 +95,9 @@ export interface ExpansionOptions {
  * @param opts Options for the expansion process
  * @returns A string with the variable references replaced
  */
-export async function expandString(tmpl: string | null | undefined, opts: ExpansionOptions): Promise<string> {
-    if (!tmpl) {
-        return tmpl as string;
+export async function expandString<T>(tmpl: string | T, opts: ExpansionOptions): Promise<string | T> {
+    if (typeof tmpl !== 'string') {
+        return tmpl;
     }
 
     const MAX_RECURSION = 10;
