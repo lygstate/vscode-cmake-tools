@@ -10,8 +10,20 @@ export type EnvironmentVariablesUndefined = Record<string, string | undefined>; 
 export type EnvironmentVariables = Record<string, string | undefined | null>;
 export type EnvironmentVariablesItem = EnvironmentVariables | null | undefined;
 
+/*
+EnvironmentVariablesPrivate is proxied because we need
+mantain compatiable with NodeJS.ProcessEnv.
+For example, supporse we have a env named with `get`, if we using
+typescript `Index Signatures`, then what's the result of env.get will have
+two meaning:
+  * call the function `get`
+  * get the environment variable `get`
+But for environment variable, access any member with `name` should return the expeted
+environment variable for that  `name`
+*/
 class EnvironmentVariablesPrivate {
     private keyMapping: Map<string, string>;
+    /* Using envProperty symbol is to provide valid implemention for [inspect]() */
     public [envProperty]: EnvironmentVariables;
     protected isWin32: boolean;
     protected preserveNull: boolean;
@@ -47,11 +59,8 @@ class EnvironmentVariablesPrivate {
         return key;
     }
 
-    public get(key: string | symbol): string | undefined | null {
-        if (typeof key === 'string') {
-            return this[envProperty][this.getKey(key, false)];
-        }
-        return undefined;
+    public get(key: string): string | undefined | null {
+        return this[envProperty][this.getKey(key, false)];
     }
 
     public set(key: string | symbol, value?: string | null, receiver?: any): boolean {
@@ -104,8 +113,7 @@ export class EnvironmentVariablesUtils {
                 } else {
                     return Reflect.getOwnPropertyDescriptor(target, p);
                 }
-            }
-            ,
+            },
             has: (target, p) => Reflect.has(target[envProperty], p),
             ownKeys: (target) => Reflect.ownKeys(target[envProperty]),
             set: (target, p, value, receiver): boolean => target.set(p, value, receiver)

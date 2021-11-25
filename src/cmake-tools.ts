@@ -2038,6 +2038,11 @@ export class CMakeTools implements vscode.Disposable, api.CMakeToolsAPI {
         return this.getCurrentLaunchTarget();
     }
 
+    /**
+     * Both debugTarget and launchTarget called this funciton, so it's refactored out
+     * Array.concat's performance would not beat the Dict.merge a lot.
+     * This is also the point to fixing the issue #1987
+     */
     async _getTargetLaunchEnvironment(drv: CMakeDriver | null, debug_env?: DebuggerEnvironmentVariable[]): Promise<EnvironmentVariablesUndefined> {
         const env = util.fromDebuggerEnvironmentVars(debug_env);
 

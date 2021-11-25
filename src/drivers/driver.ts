@@ -177,14 +177,14 @@ export abstract class CMakeDriver implements vscode.Disposable {
     /**
      * Compute the environment variables that apply with substitutions by expansionOptions
      */
-    async computeExpandedEnvironment(in_env: EnvironmentVariablesUndefined, expanded_env: EnvironmentVariablesUndefined): Promise<EnvironmentVariablesUndefined> {
+    async computeExpandedEnvironment(toExpand: EnvironmentVariablesUndefined, expanded: EnvironmentVariablesUndefined): Promise<EnvironmentVariablesUndefined> {
         const env = EnvironmentVariablesUtils.create();
         const opts = this.expansionOptions;
 
-        await Promise.resolve(
-            util.objectPairs(in_env)
-                .forEach(async ([key, value]) => env[key] = await expand.expandString(value, { ...opts, envOverride: expanded_env }))
-        );
+        for (const entry of Object.entries(toExpand)) {
+            env[entry[0]] = await expand.expandString(entry[1], {...opts, envOverride: expanded});
+        }
+
         return env;
     }
 
@@ -378,7 +378,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
             const term = vscode.window.createTerminal({
                 name: localize('file.compilation', 'File Compilation'),
                 cwd: cmd.directory,
-                env: env,
+                env,
                 shellPath
             });
             this._compileTerms.set(key, term);
