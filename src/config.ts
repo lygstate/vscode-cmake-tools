@@ -24,8 +24,6 @@ export type StatusBarButtonVisibility = "default" | "compact" | "icon" | "hidden
 export type TouchBarButtonVisibility = "default" | "hidden";
 export type UseCMakePresets = 'always' | 'never' | 'auto';
 
-export type HardEnv = Environment;
-
 export interface AdvancedTouchBarConfig {
     configure?: TouchBarButtonVisibility;
     build?: TouchBarButtonVisibility;
@@ -114,10 +112,10 @@ export interface ExtensionConfigurationSettings {
     defaultVariants: object;
     ctestArgs: string[];
     ctestDefaultArgs: string[];
-    environment: HardEnv;
-    configureEnvironment: HardEnv;
-    buildEnvironment: HardEnv;
-    testEnvironment: HardEnv;
+    environment: Environment;
+    configureEnvironment: Environment;
+    buildEnvironment: Environment;
+    testEnvironment: Environment;
     mingwSearchDirs: string[];
     emscriptenSearchDirs: string[];
     mergedCompileCommands: string | null;
@@ -446,10 +444,10 @@ export class ConfigurationReader implements vscode.Disposable {
         defaultVariants: new vscode.EventEmitter<object>(),
         ctestArgs: new vscode.EventEmitter<string[]>(),
         ctestDefaultArgs: new vscode.EventEmitter<string[]>(),
-        environment: new vscode.EventEmitter<HardEnv>(),
-        configureEnvironment: new vscode.EventEmitter<HardEnv>(),
-        buildEnvironment: new vscode.EventEmitter<HardEnv>(),
-        testEnvironment: new vscode.EventEmitter<HardEnv>(),
+        environment: new vscode.EventEmitter<Environment>(),
+        configureEnvironment: new vscode.EventEmitter<Environment>(),
+        buildEnvironment: new vscode.EventEmitter<Environment>(),
+        testEnvironment: new vscode.EventEmitter<Environment>(),
         mingwSearchDirs: new vscode.EventEmitter<string[]>(),
         emscriptenSearchDirs: new vscode.EventEmitter<string[]>(),
         mergedCompileCommands: new vscode.EventEmitter<string | null>(),
