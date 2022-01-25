@@ -9,6 +9,7 @@ import * as iconv from 'iconv-lite';
 
 import { createLogger } from './logging';
 import rollbar from './rollbar';
+import * as util from './util';
 
 import * as vscode from 'vscode';
 import * as nls from 'vscode-nls';
