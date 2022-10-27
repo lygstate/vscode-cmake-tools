@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { createLogger } from './logging';
 import { replaceAll, fixPaths, errorToString } from './util';
 import * as nls from 'vscode-nls';
-import { EnvironmentWithNull, EnvironmentUtils } from './environmentVariables';
+import { Environment, EnvironmentWithNull, EnvironmentUtils } from './environmentVariables';
 import * as matchAll from 'string.prototype.matchall';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
@@ -106,28 +106,28 @@ export async function expandString<T>(input: string | T, opts: ExpansionOptions)
     const inputString = input as string;
     try {
 
-        const maxRecursion = 10;
+    const maxRecursion = 10;
         let result = inputString;
-        let didReplacement = false;
-        let circularReference: string | undefined;
+    let didReplacement = false;
+    let circularReference: string | undefined;
 
-        let i = 0;
-        do {
-            // TODO: consider a full circular reference check?
-            const expansion = await expandStringHelper(result, opts);
-            result = expansion.result;
-            didReplacement = expansion.didReplacement;
-            circularReference = expansion.circularReference;
-            i++;
-        } while (i < maxRecursion && opts.recursive && didReplacement && !circularReference);
+    let i = 0;
+    do {
+        // TODO: consider a full circular reference check?
+        const expansion = await expandStringHelper(result, opts);
+        result = expansion.result;
+        didReplacement = expansion.didReplacement;
+        circularReference = expansion.circularReference;
+        i++;
+    } while (i < maxRecursion && opts.recursive && didReplacement && !circularReference);
 
-        if (circularReference) {
-            log.warning(localize('circular.variable.reference', 'Circular variable reference found: {0}', circularReference));
-        } else if (i === maxRecursion) {
-            log.error(localize('reached.max.recursion', 'Reached max string expansion recursion. Possible circular reference.'));
-        }
+    if (circularReference) {
+        log.warning(localize('circular.variable.reference', 'Circular variable reference found: {0}', circularReference));
+    } else if (i === maxRecursion) {
+        log.error(localize('reached.max.recursion', 'Reached max string expansion recursion. Possible circular reference.'));
+    }
 
-        return replaceAll(result, '${dollar}', '$');
+    return replaceAll(result, '${dollar}', '$');
     } catch (e) {
         log.warning(localize('exception.expanding.string', 'Exception while expanding string {0}: {1}', inputString, errorToString(e)));
     }
@@ -288,4 +288,18 @@ export function getParentEnvSubstitutions(input: string, subs: Map<string, strin
     }
 
     return subs;
+}
+
+/**
+ * Compute the environment variables that apply with substitutions by expansionOptions
+ */
+export async function expandEnvironment(toExpand: Environment, expanded: Environment, expansionOptions: ExpansionOptions): Promise<Environment> {
+    const env = EnvironmentUtils.create();
+    const opts = expansionOptions;
+
+    for (const entry of Object.entries(toExpand)) {
+        env[entry[0]] = await expandString(entry[1], {...opts, envOverride: expanded});
+    }
+
+    return env;
 }

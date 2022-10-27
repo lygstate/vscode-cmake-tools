@@ -269,14 +269,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
      * Compute the environment variables that apply with substitutions by expansionOptions
      */
     async computeExpandedEnvironment(toExpand: Environment, expanded: Environment): Promise<Environment> {
-        const env = EnvironmentUtils.create();
-        const opts = this.expansionOptions;
-
-        for (const entry of Object.entries(toExpand)) {
-            env[entry[0]] = await expand.expandString(entry[1], { ...opts, envOverride: expanded });
-        }
-
-        return env;
+        return expand.expandEnvironment(toExpand, expanded, this.expansionOptions);
     }
 
     /**
@@ -299,6 +292,9 @@ export abstract class CMakeDriver implements vscode.Disposable {
         if (extraEnvironmentVariables) {
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(extraEnvironmentVariables, envs)]);
         }
+        if (!this.useCMakePresets) {
+            envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(envs, envs)]);
+        }
         return envs;
     }
 
@@ -316,6 +312,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this.config.environment, envs)]);
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this.config.buildEnvironment, envs)]);
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this._variantEnv, envs)]);
+            envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(envs, envs)]);
             return envs;
         }
     }
@@ -339,6 +336,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this.config.environment, envs)]);
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this.config.testEnvironment, envs)]);
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this._variantEnv, envs)]);
+            envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(envs, envs)]);
             return envs;
         }
     }
@@ -562,20 +560,20 @@ export abstract class CMakeDriver implements vscode.Disposable {
      */
     async setConfigurePreset(configurePreset: preset.ConfigurePreset | null): Promise<void> {
         if (configurePreset) {
-            log.info(localize('switching.to.config.preset', 'Switching to configure preset: {0}', configurePreset.name));
+        log.info(localize('switching.to.config.preset', 'Switching to configure preset: {0}', configurePreset.name));
 
-            const newBinaryDir = configurePreset.binaryDir;
-            const needs_clean = this.binaryDir === newBinaryDir && preset.configurePresetChangeNeedsClean(configurePreset, this._configurePreset);
-            await this.doSetConfigurePreset(needs_clean, async () => {
-                await this._setConfigurePreset(configurePreset);
-            });
+        const newBinaryDir = configurePreset.binaryDir;
+        const needs_clean = this.binaryDir === newBinaryDir && preset.configurePresetChangeNeedsClean(configurePreset, this._configurePreset);
+        await this.doSetConfigurePreset(needs_clean, async () => {
+            await this._setConfigurePreset(configurePreset);
+        });
         } else {
             log.info(localize('unsetting.config.preset', 'Unsetting configure preset'));
 
             await this.doSetConfigurePreset(false, async () => {
                 await this._setConfigurePreset(configurePreset);
             });
-        }
+    }
     }
 
     private async _setConfigurePreset(configurePreset: preset.ConfigurePreset | null): Promise<void> {
@@ -585,18 +583,18 @@ export abstract class CMakeDriver implements vscode.Disposable {
         this._binaryDir = configurePreset?.binaryDir || '';
 
         if (configurePreset) {
-            if (configurePreset.generator) {
-                this._generator = {
-                    name: configurePreset.generator,
-                    platform: configurePreset.architecture ? getValue(configurePreset.architecture) : undefined,
-                    toolset: configurePreset.toolset ? getValue(configurePreset.toolset) : undefined
-                };
-            } else {
-                log.debug(localize('no.generator', 'No generator specified'));
-            }
+        if (configurePreset.generator) {
+            this._generator = {
+                name: configurePreset.generator,
+                platform: configurePreset.architecture ? getValue(configurePreset.architecture) : undefined,
+                toolset: configurePreset.toolset ? getValue(configurePreset.toolset) : undefined
+            };
+        } else {
+            log.debug(localize('no.generator', 'No generator specified'));
+        }
         } else {
             this._generator = null;
-        }
+    }
     }
 
     /**
@@ -1875,7 +1873,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
 
         if (checkBuildOverridesPresent(this.config)) {
             log.info(localize('build.with.overrides', 'NOTE: You are building with preset {0}, but there are some overrides being applied from your VS Code settings.', buildPreset.displayName ?? buildPreset.name));
-        }
+    }
 
         return { command: this.cmake.path, args: expanded_args, build_env};
     }
@@ -1966,7 +1964,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
                         await this.cmakeBuildRunner.setBuildProcessForTask(await vscode.tasks.executeTask(resolvedTask));
                     }
                 }
-            } else {
+        } else {
                 const exeOpt: proc.ExecutionOptions = { environment: buildcmd.build_env, outputEncoding: outputEnc };
                 this.cmakeBuildRunner.setBuildProcess(this.executeCommand(buildcmd.command, buildcmd.args, consumer, exeOpt));
             }
@@ -1992,7 +1990,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
         if (this.configureProcess && this.configureProcess.child) {
             await util.termProc(this.configureProcess.child);
             this.configureProcess = null;
-        }
+            }
         if (this.cmakeBuildRunner) {
             await this.cmakeBuildRunner.stop();
         }
