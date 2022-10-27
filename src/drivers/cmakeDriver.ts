@@ -271,14 +271,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
      * Compute the environment variables that apply with substitutions by expansionOptions
      */
     async computeExpandedEnvironment(toExpand: Environment, expanded: Environment): Promise<Environment> {
-        const env = EnvironmentUtils.create();
-        const opts = this.expansionOptions;
-
-        for (const entry of Object.entries(toExpand)) {
-            env[entry[0]] = await expand.expandString(entry[1], { ...opts, envOverride: expanded });
-        }
-
-        return env;
+        return expand.expandEnvironment(toExpand, expanded, this.expansionOptions);
     }
 
     /**
@@ -301,6 +294,9 @@ export abstract class CMakeDriver implements vscode.Disposable {
         if (extraEnvironmentVariables) {
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(extraEnvironmentVariables, envs)]);
         }
+        if (!this.useCMakePresets) {
+            envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(envs, envs)]);
+        }
         return envs;
     }
 
@@ -318,6 +314,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this.config.environment, envs)]);
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this.config.buildEnvironment, envs)]);
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this._variantEnv, envs)]);
+            envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(envs, envs)]);
             return envs;
         }
     }
@@ -341,6 +338,7 @@ export abstract class CMakeDriver implements vscode.Disposable {
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this.config.environment, envs)]);
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this.config.testEnvironment, envs)]);
             envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(this._variantEnv, envs)]);
+            envs = EnvironmentUtils.merge([envs, await this.computeExpandedEnvironment(envs, envs)]);
             return envs;
         }
     }

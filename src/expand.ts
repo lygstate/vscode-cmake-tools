@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { createLogger } from './logging';
 import { replaceAll, fixPaths, errorToString } from './util';
 import * as nls from 'vscode-nls';
-import { EnvironmentWithNull, EnvironmentUtils } from './environmentVariables';
+import { Environment, EnvironmentWithNull, EnvironmentUtils } from './environmentVariables';
 import * as matchAll from 'string.prototype.matchall';
 
 nls.config({ messageFormat: nls.MessageFormat.bundle, bundleFormat: nls.BundleFormat.standalone })();
@@ -181,6 +181,9 @@ async function expandStringHelper(input: string, opts: ExpansionOptions) {
         expansionOccurred = true;
         const full = mat[0];
         const varName = mat[1];
+        if (!(varName in env)) {
+            continue;
+        }
         const replacement = fixPaths(env[varName]) || '';
         subs.set(full, replacement);
     }
@@ -190,6 +193,9 @@ async function expandStringHelper(input: string, opts: ExpansionOptions) {
         expansionOccurred = true;
         const full = mat[0];
         const varName = mat[1];
+        if (!(varName in env)) {
+            continue;
+        }
         const replacement = fixPaths(env[varName]) || '';
         subs.set(full, replacement);
     }
@@ -199,6 +205,9 @@ async function expandStringHelper(input: string, opts: ExpansionOptions) {
         expansionOccurred = true;
         const full = mat[0];
         const varName = mat[1];
+        if (!(varName in env)) {
+            continue;
+        }
         const replacement: string = fixPaths(env[varName]) || '';
         // Avoid replacing an env variable by itself, e.g. PATH:env{PATH}.
         const envRegex4 = RegExp(`\\$env\\{(${varValueRegexp})\\}`, "g");
@@ -284,6 +293,20 @@ export function substituteAll(input: string, subs: Map<string, string>) {
         }
     });
     return { result: finalString, didReplacement };
+}
+
+/**
+ * Compute the environment variables that apply with substitutions by expansionOptions
+ */
+export async function expandEnvironment(toExpand: Environment, expanded: Environment, expansionOptions: ExpansionOptions): Promise<Environment> {
+    const env = EnvironmentUtils.create();
+    const opts = expansionOptions;
+
+    for (const entry of Object.entries(toExpand)) {
+        env[entry[0]] = await expandString(entry[1], {...opts, envOverride: expanded});
+    }
+
+    return env;
 }
 
 export function getParentEnvSubstitutions(input: string, subs: Map<string, string>, penvOverride?: EnvironmentWithNull): Map<string, string> {
