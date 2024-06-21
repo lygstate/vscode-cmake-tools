@@ -245,10 +245,6 @@ export function parseCompileFlags(cptVersion: cpptools.Version, args: string[], 
  * and target architecture parsed from compiler flags.
  */
 export function getIntelliSenseMode(cptVersion: cpptools.Version, compilerPath: string, targetArch: Architecture) {
-    if (cptVersion >= cpptools.Version.v5 && targetArch === undefined) {
-        // IntelliSenseMode is optional for CppTools v5+ and is determined by CppTools.
-        return undefined;
-    }
     const canUseArm = (cptVersion >= cpptools.Version.v4);
     const compilerName = path.basename(compilerPath || "").toLocaleLowerCase();
     if (compilerName === 'cl.exe') {
@@ -454,25 +450,25 @@ export class CppConfigurationProvider implements cpptools.CustomConfigurationPro
         const targetArchFromToolchains = targetFromToolchains ? parseTargetArch(targetFromToolchains) : undefined;
 
         const normalizedCompilerPath = util.platformNormalizePath(compilerPath);
-        let compileCommandFragments = useFragments ? (fileGroup.compileCommandFragments || target.compileCommandFragments) : [];
+        const compileCommandFragments = fileGroup.compileCommandFragments ?? target.compileCommandFragments;
         const getAsFlags = (fragments?: string[]) => {
             if (!fragments) {
                 return [];
             }
             return [...util.flatMap(fragments, fragment => shlex.split(fragment))];
         };
-        let flags: string[] = [];
-        let extraDefinitions: string[] = [];
-        let standard: StandardVersion;
-        let targetArch: Architecture;
-        let intelliSenseMode: IntelliSenseMode;
+        let flags = getAsFlags(compileCommandFragments);
         let defines = (fileGroup.defines || target.defines || []);
-        if (!useFragments) {
-            // Send the intelliSenseMode and standard only for CppTools API v5 and below.
-            flags = getAsFlags(fileGroup.compileCommandFragments || target.compileCommandFragments);
-            ({ extraDefinitions, standard, targetArch } = parseCompileFlags(this.cpptoolsVersion, flags, lang));
+        // The returned standard for CppTools API v6 and uppper will be undefined.
+        const { extraDefinitions, standard, targetArch } = parseCompileFlags(this.cpptoolsVersion, flags, lang);
+        const intelliSenseMode = getIntelliSenseMode(this.cpptoolsVersion, compilerPath, targetArchFromToolchains ?? targetArch);
+        log.debug(`buildConfigurationData ${lang}:${standard} ${intelliSenseMode} ${normalizedCompilerPath} ${compileCommandFragments} flags:${flags} defines:${defines} extraDefinitions:${extraDefinitions}`);
+        if (useFragments) {
+            // Do not send the flags for CppTools API v6 and uppper.
+            flags = [];
+        } else {
+            // Send the extraDefinitions only for CppTools API v5 and below.
             defines = defines.concat(extraDefinitions);
-            intelliSenseMode = getIntelliSenseMode(this.cpptoolsVersion, compilerPath, targetArchFromToolchains ?? targetArch);
         }
         const frameworkPaths = Array.from(new Set<string>((fileGroup.frameworks ?? []).map(f => path.dirname(f.path))));
         const includePath = (fileGroup.includePath ? fileGroup.includePath.map(p => p.path) : target.includePath || []).concat(frameworkPaths);
@@ -496,7 +492,6 @@ export class CppConfigurationProvider implements cpptools.CustomConfigurationPro
         }
         if (targetFromToolchains) {
             if (useFragments) {
-                compileCommandFragments = compileCommandFragments.slice(0);
                 compileCommandFragments.push(`--target=${targetFromToolchains}`);
             } else {
                 flags.push(`--target=${targetFromToolchains}`);
